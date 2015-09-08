@@ -783,9 +783,14 @@ def search_form(request):
     collections = filter_by_access(request.user, Collection)
     collections = apply_collection_visibility_preferences(
         request.user, collections)
-    if not collections:
-        raise Http404()
-
+    
+	# ----------------------------- #
+	#								#
+	#if not collections:			#
+    #    raise Http404()			#
+	#								#
+	# ----------------------------- #
+	
     def _get_fields():
         return Field.objects.select_related('standard').all().order_by(
             'standard__title', 'name')

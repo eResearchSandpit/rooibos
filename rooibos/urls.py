@@ -95,11 +95,11 @@ apps_pre_slice = apps_prefix.__len__()
 
 apps = filter(lambda a: a.startswith(apps_prefix), settings.INSTALLED_APPS)
 
-if settings.CLIP_APP_NAMES:
-    # TODO update for a tuple rather than a string - currently only the first will be processed
-    clip = settings.CLIP_APP_STRINGS[0]
-else:
-    clip = ''
+#if settings.CLIP_APP_NAMES:
+#    # TODO update for a tuple rather than a string - currently only the first will be processed
+#    clip = settings.CLIP_APP_STRINGS[0]
+#else:
+#    clip = ''
 
 app_list = [app[len(clip):] if app[:len(clip)] == clip else app for app in [app[apps_pre_slice:] for app in apps]]
 # TODO: is it a correct assumpion that showcases would want to clip names as well?
