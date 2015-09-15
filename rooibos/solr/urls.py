@@ -1,10 +1,10 @@
-from django.conf.urls import patterns, url
-from views import search, search_facets, search_json, browse, overview, \
-    fieldvalue_autocomplete, search_form
+from django.conf.urls import *
+from views import *
 
 urlpatterns = patterns(
     '',
     url(r'^explore/$', search, name='solr-search'),
+	url(r'^explore/db/(?P<collection_id>\d+)/(?P<field_id>\d+)/(?P<value>.+)$', find_in_db, name='db-search'),
     url(r'^explore/(?P<id>\d+)/(?P<name>[\w-]+)/$', search,
         name='solr-search-collection'),
     url(r'^explore-facets/$', search_facets, name='solr-search-facets'),

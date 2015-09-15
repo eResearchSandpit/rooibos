@@ -130,8 +130,9 @@ INSTALLED_APPS = (
     'rooibos.presentation',
     'rooibos.statistics',
     'rooibos.federatedsearch',
-    'rooibos.federatedsearch.artstor',
-    'rooibos.federatedsearch.flickr',
+	'rooibos.unitedsearch',
+    #'rooibos.federatedsearch.artstor',
+    #'rooibos.federatedsearch.flickr',
     'rooibos.converters',
     'rest_framework',
     # replace rooibos.contrib.tagging with django-tagging
@@ -153,7 +154,8 @@ INSTALLED_APPS = (
 )
 
 TEMPLATE_LOADERS = (
-    ('django.template.loaders.cached.Loader', (
+    (
+		'django.template.loaders.cached.Loader', (
         'django.template.loaders.filesystem.Loader',
         'django.template.loaders.app_directories.Loader',
     )),
@@ -243,12 +245,13 @@ LOGIN_CHECKS = (
 )
 
 # move to settings_local for system customization
-# TEMPLATE_DIRS = (
-#     os.path.normpath(os.path.join(ROOIBOS_ROOT, 'templates')),
+TEMPLATE_DIRS = (
+    os.path.normpath(os.path.join(ROOIBOS_ROOT, 'templates')),
+	os.path.normpath(os.path.join(ROOIBOS_ROOT, 'unitedsearch', 'templates'))
 #     os.path.normpath(os.path.join(ROOIBOS_ROOT, 'access', 'templates')),
 #     os.path.normpath(os.path.join(ROOIBOS_ROOT, 'ui', 'templates')),
 #     os.path.normpath(os.path.join(ROOIBOS_ROOT, 'contrib', 'google_analytics', 'templates')),
-# )
+ )
 
 PDF_PAGESIZE = 'letter'  # 'A4'
 
@@ -265,8 +268,9 @@ GROUP_MANAGERS = {
 }
 
 ## these should be overridden by settings_local
-FLICKR_KEY = ''
-FLICKR_SECRET = ''
+
+FLICKR_KEY = '3a092eb0151a289f86ea4b9bd71c3d8e'
+FLICKR_SECRET = 'a90b7a165091cab4'
 
 additional_settings = [
     'settings_local',

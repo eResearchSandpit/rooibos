@@ -8,14 +8,12 @@ from datetime import datetime, timedelta
 from threading import Thread
 from models import HitCount
 
-# from nasa import NasaImageExchange
-from artstor import ArtstorSearch
-from flickr import FlickrSearch
-from shared import SharedSearch
+from rooibos.unitedsearch import aggregate
 
 import logging
+import re
+import json
 
-log = logging.getLogger('rooibos')
 
 #sources = {
 #    'NasaImageExchange': NasaImageExchange,
@@ -23,30 +21,20 @@ log = logging.getLogger('rooibos')
 #    'Flickr': FlickrSearch,
 #}
 
-source_classes = [
-#    NasaImageExchange,
-    ArtstorSearch,
-    FlickrSearch,
-    SharedSearch,
-]
+source_classes = aggregate.federatedSearchSources() #[
+    #NasaImageExchange, TODO: ignoring completely
+    #ArtstorSearch, TODO: this should be implemented through unitedsearch
+    #FlickrSearch, TODO: Maybe implement later
 
 
-def available_federated_sources(user):
-    for c in source_classes:
-        if hasattr(c, 'get_instances'):
-            for i in c.get_instances(user):
-                yield i
-        elif c.available():
-            yield c()
 
 def sidebar_api_raw(request, query, cached_only=False):
+    print "sidebar_api_raw-----------"
+    print query
 
     sources = dict(
-        (s.get_source_id(), s) for s in available_federated_sources(request.user)
+        (lambda s: (s.get_source_id(), s))(c()) for c in source_classes
     )
-
-    if not sources:
-        return dict(html='', hits=0)
 
     if not request.user.is_authenticated():
         return dict(html="Please log in to see additional content.", hits=0)
@@ -65,7 +53,8 @@ def sidebar_api_raw(request, query, cached_only=False):
             self.cache_hit = False
         def run(self):
             self.instance = sources[self.source]
-            if cache.has_key(self.source):
+            # if we've done this search before, simply use the cached result, don't bother re-searching
+            if False:#cache.has_key(self.source): #TODO: this is debug only, re-enable caching for better repeat performance
                 self.cache_hit = True
                 if cache[self.source]:
                     self.hits = cache[self.source]
@@ -78,7 +67,7 @@ def sidebar_api_raw(request, query, cached_only=False):
                                             valid_until=datetime.now() + timedelta(1))
                 except Exception, e:
                     import traceback
-                    log.error("Federated Search: %s\n%s" % (e, traceback.format_exc()))
+                    logging.error("Federated Search: %s\n%s" % (e, traceback.format_exc()))
                     self.hits = -1
 
 
@@ -98,7 +87,10 @@ def sidebar_api_raw(request, query, cached_only=False):
             if thread.hits > 0:
                 total_hits += thread.hits
             results.append((thread.instance, thread.hits))
-
+    """
+    print "*******Fed.views***********"
+    print results
+    """
     return dict(html=render_to_string('federatedsearch_results.html',
                             dict(results=sorted(results),
                                  query=query),
@@ -108,5 +100,33 @@ def sidebar_api_raw(request, query, cached_only=False):
 
 @json_view
 def sidebar_api(request):
+
     query = ' '.join(request.GET.get('q', '').strip().lower().split())
+ 
+    # build params from query if possible (if query contains type=value parameters)
+    subquery = query.split('keywords=')[1]
+    params={}
+    keywords=""
+    # trim 'search=search_type, keywords='
+    clauses = subquery.split(',')
+
+    for clause in clauses:
+	    type_value = clause.strip().split("=", 1)
+        
+	    if len(type_value) == 1:
+		    keywords += type_value[0] + " "
+	    elif len(type_value) > 1:
+                t = str(type_value[0])
+                v = str(type_value[1])
+                print "v ===== "+v
+                if t in params:
+                    pt = params[t]
+                    pt.append(v)
+                    params[t]= pt
+                else:
+                    params[t]= [v]
+                print "params ================= "
+                print params
+    query = re.sub("(?<=keywords=).*", keywords.strip(), query) + ", params=" + json.dumps(params)
+    print "final query in sidebar_api      ==     " + str(query)
     return sidebar_api_raw(request, query)

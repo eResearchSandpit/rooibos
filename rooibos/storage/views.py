@@ -396,14 +396,14 @@ def import_files(request):
                 if len(records) == 1:
                     # Matching record found
                     record = records[0]
-                    media = record.media_set.filter(storage=storage, content_type=mimetype)
+                    media = record.media_set.filter(storage=storage, mimetype=mimetype)
                     media_same_id = media.filter(name=id)
                     if len(media) == 0 or (len(media_same_id) == 0 and multiple_files):
                         # No media yet
                         media = Media.objects.create(record=record,
                                                      name=id,
                                                      storage=storage,
-                                                     content_type=mimetype)
+                                                     mimetype=mimetype)
                         media.save_file(file.name, file)
                         result = "File added (Identifier '%s')." % id
                     elif len(media_same_id) > 0 and multiple_files:
@@ -431,7 +431,7 @@ def import_files(request):
                         media = Media.objects.create(record=record,
                                                      name=id,
                                                      storage=storage,
-                                                     content_type=mimetype)
+                                                     mimetype=mimetype)
                         media.save_file(file.name, file)
                         result = "File added to new record (Identifier '%s')." % id
                     else:

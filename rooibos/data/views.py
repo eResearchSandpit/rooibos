@@ -1,9 +1,5 @@
-# from rooibos.viewers import get_viewers
-from __future__ import with_statement, absolute_import
-import os
-import random
-import string
-import json
+#from rooibos.viewers import get_viewers
+from __future__ import with_statement
 from django import forms
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -14,27 +10,29 @@ from django.db.models import Q
 from django.forms.formsets import formset_factory
 from django.forms.models import modelformset_factory
 from django.forms.util import ErrorList
-from django.http import HttpResponse, Http404, HttpResponseRedirect, HttpResponseForbidden
+from django.http import HttpResponse, Http404,  HttpResponseRedirect, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, get_list_or_404, render_to_response
 from django.template import RequestContext
 from django.template.loader import render_to_string
-from django.contrib import messages
+import json
 from django.utils.html import conditional_escape
 from django.utils.safestring import mark_safe
 from django.views.decorators.http import require_POST
-
-from rooibos.access.functions import filter_by_access, check_access
+from models import *
+from forms import FieldSetChoiceField, get_collection_visibility_prefs_form
+from functions import get_collection_visibility_preferences, \
+    set_collection_visibility_preferences, apply_collection_visibility_preferences
+from rooibos.access import filter_by_access, check_access
 from rooibos.presentation.models import Presentation
 from rooibos.storage.models import Media, Storage
 from rooibos.userprofile.views import load_settings, store_settings
 from rooibos.util import json_view
 from rooibos.workers.models import JobInfo
+from spreadsheetimport import SpreadsheetImport
+import os
+import random
+import string
 
-from .models import *
-from .forms import FieldSetChoiceField, get_collection_visibility_prefs_form
-from .functions import get_collection_visibility_preferences, set_collection_visibility_preferences
-from .functions import apply_collection_visibility_preferences
-from .spreadsheetimport import SpreadsheetImport
 
 
 @login_required
@@ -42,11 +40,24 @@ def record_delete(request, id, name):
     if request.method == 'POST':
         record = Record.get_or_404(id, request.user)
         if record.editable_by(request.user):
+            print 'record ='+ str(type(record)) + 'i am record: ' + str(record)
+            storage, created = Storage.objects.get_or_create(name='unitedsearch')
+            #print 'potential scratch dir: '+storage.get_derivative_storage_path()
+            der_path = storage.get_derivative_storage_path()
+            scratchlist = os.listdir(der_path)
+            prefix = str(id)+'-'
+            for der in scratchlist:
+                if der.startswith(prefix):
+                    print 'deleting temp file '+der
+                    #storage.delete_file(der)
+                    os.remove(der_path+'/'+der)
+            storage_dir = storage.base
+            image_file = record.get_image_url()
+            print 'deleting record image ' + image_file
             record.delete()
-            messages.success(request, message="Record deleted successfully.")
+            request.user.message_set.create(message="Record deleted successfully.")
 
             from rooibos.middleware import HistoryMiddleware
-
             return HttpResponseRedirect(HistoryMiddleware.go_back(
                 request,
                 to_before=reverse('data-record', kwargs=dict(id=id, name=name)),
@@ -55,10 +66,10 @@ def record_delete(request, id, name):
 
     return HttpResponseRedirect(reverse('data-record', kwargs=dict(id=id, name=name)))
 
-
 def record(request, id, name, contexttype=None, contextid=None, contextname=None,
            edit=False, customize=False, personal=False, copy=False,
            copyid=None, copyname=None):
+
     collections = apply_collection_visibility_preferences(request.user, Collection.objects.all())
     writable_collections = list(filter_by_access(request.user, collections, write=True).values_list('id', flat=True))
     readable_collections = list(filter_by_access(request.user, collections).values_list('id', flat=True))
@@ -93,7 +104,7 @@ def record(request, id, name, contexttype=None, contextid=None, contextname=None
     # Only list media that is downloadable or editable
     for m in media:
         # Calculate permissions and store with object for later use in template
-        m.downloadable_in_template = m.is_downloadable_by(request.user)
+        m.downloadable_in_template =  m.is_downloadable_by(request.user)
         m.editable_in_template = m.editable_by(request.user)
     media = filter(lambda m: m.downloadable_in_template or m.editable_in_template, media)
 
@@ -106,8 +117,7 @@ def record(request, id, name, contexttype=None, contextid=None, contextname=None
 
     fieldsetform = FieldSetForm(request.GET)
     if fieldsetform.is_valid():
-        fieldset = FieldSet.for_user(request.user).get(id=fieldsetform.cleaned_data['fieldset']) if \
-        fieldsetform.cleaned_data['fieldset'] else None
+        fieldset = FieldSet.for_user(request.user).get(id=fieldsetform.cleaned_data['fieldset']) if fieldsetform.cleaned_data['fieldset'] else None
     elif id and name:
         fieldset = None
     else:
@@ -122,16 +132,13 @@ def record(request, id, name, contexttype=None, contextid=None, contextname=None
             return HttpResponseRedirect(reverse('data-record', kwargs=dict(id=id, name=name)))
 
         def _field_choices():
-            fsf = list(
-                FieldSetField.objects.select_related('fieldset', 'field').all().order_by('fieldset__name', 'order',
-                                                                                         'field__label'))
+            fsf = list(FieldSetField.objects.select_related('fieldset', 'field').all().order_by('fieldset__name', 'order', 'field__label'))
             grouped = {}
             for f in fsf:
                 grouped.setdefault((f.fieldset.title, f.fieldset.id), []).append(f.field)
-            others = list(
-                Field.objects.exclude(id__in=[f.field.id for f in fsf]).order_by('label').values_list('id', 'label'))
+            others = list(Field.objects.exclude(id__in=[f.field.id for f in fsf]).order_by('label').values_list('id', 'label'))
             choices = [('', '-' * 10)] + [(set[0], [(f.id, f.label) for f in fields])
-                                          for set, fields in sorted(grouped.iteritems(), key=lambda s: s[0][0])]
+                for set, fields in sorted(grouped.iteritems(), key=lambda s: s[0][0])]
             if others:
                 choices.append(('Others', others))
             return choices
@@ -175,8 +182,7 @@ def record(request, id, name, contexttype=None, contextid=None, contextname=None
 
         fieldvalues_readonly = []
         if customize or context:
-            fieldvalues = record.get_fieldvalues(owner=request.user, context=context, hidden=True).filter(
-                owner=request.user)
+            fieldvalues = record.get_fieldvalues(owner=request.user, context=context, hidden=True).filter(owner=request.user)
         else:
             fieldvalues = record.get_fieldvalues(hidden=True)
 
@@ -185,19 +191,18 @@ def record(request, id, name, contexttype=None, contextid=None, contextname=None
 
         CollectionFormSet = formset_factory(CollectionForm, extra=0)
 
+
         if request.method == 'POST':
             formset = FieldValueFormSet(request.POST, request.FILES, queryset=fieldvalues, prefix='fv')
-            collectionformset = CollectionFormSet(request.POST, request.FILES, prefix='c') if not (
-            customize or context) else None
-            if formset.is_valid() and (
-                    customize or context or collectionformset.is_valid()):  # or metadataform.is_valid()):
+            collectionformset = CollectionFormSet(request.POST, request.FILES, prefix='c') if not (customize or context) else None
+            if formset.is_valid() and (customize or context or collectionformset.is_valid()):# or metadataform.is_valid()):
 
                 record.save()
 
                 if not (customize or context):
-                    collections = dict((c['id'], c)
-                                       for c in collectionformset.cleaned_data
-                                       if c['id'] in valid_collections)
+                    collections = dict((c['id'],c)
+                        for c in collectionformset.cleaned_data
+                        if c['id'] in valid_collections)
                     for item in record.collectionitem_set.filter(collection__in=valid_collections):
                         if collections.has_key(item.collection_id):
                             if not collections[item.collection_id]['member']:
@@ -230,13 +235,13 @@ def record(request, id, name, contexttype=None, contextid=None, contextname=None
                     if context:
                         instance.context = context
                     instance.save()
-                messages.success(request, message="Record saved successfully.")
+                request.user.message_set.create(message="Record saved successfully.")
 
                 url = reverse('data-record-edit-customize' if customize else 'data-record-edit',
                               kwargs=dict(id=record.id, name=record.name))
 
                 next = request.GET.get('next',
-                                       reverse('data-record', kwargs=dict(id=record.id, name=record.name)))
+                       reverse('data-record', kwargs=dict(id=record.id, name=record.name)))
 
                 return HttpResponseRedirect(url if request.POST.has_key('save_and_continue') else next)
         else:
@@ -259,8 +264,7 @@ def record(request, id, name, contexttype=None, contextid=None, contextname=None
                     ))
                 FieldValueFormSet.extra = len(initial) + 3
             elif fieldset:
-                needed = fieldset.fields.filter(~Q(id__in=[fv.field_id for fv in fieldvalues])).order_by(
-                    'fieldsetfield__order').values_list('id', flat=True)
+                needed = fieldset.fields.filter(~Q(id__in=[fv.field_id for fv in fieldvalues])).order_by('fieldsetfield__order').values_list('id', flat=True)
                 initial = [{}] * len(fieldvalues) + [{'field': id} for id in needed]
                 FieldValueFormSet.extra = len(needed) + 3
             else:
@@ -271,7 +275,7 @@ def record(request, id, name, contexttype=None, contextid=None, contextname=None
 
                 collections = dict(
                     ((coll.id, dict(id=coll.id, title=coll.title))
-                     for coll in Collection.objects.filter(id__in=valid_collections)
+                        for coll in Collection.objects.filter(id__in=valid_collections)
                     )
                 )
 
@@ -293,14 +297,13 @@ def record(request, id, name, contexttype=None, contextid=None, contextname=None
 
     if can_edit:
         from rooibos.storage.views import media_upload_form
-
         UploadFileForm = media_upload_form(request)
         upload_form = UploadFileForm() if UploadFileForm else None
     else:
         upload_form = None
 
     record_usage = record.presentationitem_set.values('presentation') \
-        .distinct().count() if can_edit else 0
+                    .distinct().count() if can_edit else 0
 
     return render_to_response('data_record.html',
                               {'record': record,
@@ -317,11 +320,10 @@ def record(request, id, name, contexttype=None, contextid=None, contextname=None
                                'next': request.GET.get('next'),
                                'collection_items': collection_items,
                                'upload_form': upload_form,
-                               'upload_url': ("%s?sidebar&next=%s" % (
-                               reverse('storage-media-upload', args=(record.id, record.name)), request.get_full_path()))
-                               if record.id else None,
+                               'upload_url': ("%s?sidebar&next=%s" % (reverse('storage-media-upload', args=(record.id, record.name)), request.get_full_path()))
+                                             if record.id else None,
                                'record_usage': record_usage,
-                              },
+                               },
                               context_instance=RequestContext(request))
 
 
@@ -331,26 +333,18 @@ def _get_scratch_dir():
         os.makedirs(path)
     return path
 
-# TODO: Is there anything else from the todo '_get_scratch_dir  - make proper function' than this?
-def get_scratch_dir():
-    path = os.path.join(settings.SCRATCH_DIR, 'data-import')
-    if not os.path.exists(path):
-        os.makedirs(path)
-    return path
-
-
 def _get_filename(request, file):
     return request.COOKIES[settings.SESSION_COOKIE_NAME] + '-' + file
 
-
 @login_required
 def data_import(request):
+
     class UploadFileForm(forms.Form):
         file = forms.FileField()
 
         def clean_file(self):
             file = self.cleaned_data['file']
-            if os.path.splitext(file.name)[1].lower() not in ('.csv', '.txt'):
+            if os.path.splitext(file.name)[1] != '.csv':
                 raise forms.ValidationError("Please upload a CSV file with a .csv file extension")
             return file
 
@@ -391,11 +385,12 @@ def data_import(request):
 class DisplayOnlyTextWidget(forms.HiddenInput):
     def render(self, name, value, attrs):
         return super(DisplayOnlyTextWidget, self).render(name, value, attrs) + \
-               mark_safe(conditional_escape(getattr(self, 'initial', value or u'')))
+            mark_safe(conditional_escape(getattr(self, 'initial', value or u'')))
 
 
 @login_required
 def data_import_file(request, file):
+
     available_collections = filter_by_access(request.user, Collection)
     writable_collection_ids = list(filter_by_access(request.user, Collection, write=True).values_list('id', flat=True))
     if not available_collections:
@@ -406,15 +401,13 @@ def data_import_file(request, file):
         return Field.objects.select_related('standard').all().order_by('standard', 'name')
 
     def _field_choices():
-        fsf = list(FieldSetField.objects.select_related('fieldset', 'field').all().order_by('fieldset__name', 'order',
-                                                                                            'field__label'))
+        fsf = list(FieldSetField.objects.select_related('fieldset', 'field').all().order_by('fieldset__name', 'order', 'field__label'))
         grouped = {}
         for f in fsf:
             grouped.setdefault((f.fieldset.title, f.fieldset.id), []).append(f.field)
-        others = list(
-            Field.objects.exclude(id__in=[f.field.id for f in fsf]).order_by('label').values_list('id', 'label'))
+        others = list(Field.objects.exclude(id__in=[f.field.id for f in fsf]).order_by('label').values_list('id', 'label'))
         choices = [('', '-' * 10)] + [(set[0], [(f.id, f.label) for f in fields])
-                                      for set, fields in sorted(grouped.iteritems(), key=lambda s: s[0][0])]
+            for set, fields in sorted(grouped.iteritems(), key=lambda s: s[0][0])]
         if others:
             choices.append(('Others', others))
         return choices
@@ -429,16 +422,14 @@ def data_import_file(request, file):
 
     class ImportOptionsForm(forms.Form):
         separator = forms.CharField(required=False)
-        collections = forms.MultipleChoiceField(
-            choices=((c.id, '%s%s' % ('*' if c.id in writable_collection_ids else '', c.title)) for c in
-                     sorted(available_collections, key=lambda c: c.title)),
-            widget=forms.CheckboxSelectMultiple)
+        collections = forms.MultipleChoiceField(choices=((c.id, '%s%s' % ('*' if c.id in writable_collection_ids else '', c.title)) for c in sorted(available_collections, key=lambda c: c.title)),
+                                                widget=forms.CheckboxSelectMultiple)
         fieldset = FieldSetChoiceField(user=request.user, default_label='any')
         #forms.ChoiceField(choices=[(0, 'any')] + [(f.id, f.title) for f in available_fieldsets], required=False)
         update = forms.BooleanField(label='Update existing records', initial=True, required=False)
         add = forms.BooleanField(label='Add new records', initial=True, required=False)
         test = forms.BooleanField(label='Test import only', initial=False, required=False)
-        personal = forms.BooleanField(label='Personal records', initial=False, required=False)
+        personal = forms.BooleanField(label='Personal records', initial=True, required=False)
 
         def clean(self):
             cleaned_data = self.cleaned_data
@@ -448,8 +439,7 @@ def data_import_file(request, file):
             if not personal:
                 for c in map(int, cleaned_data['collections']):
                     if not c in writable_collection_ids:
-                        self._errors['collections'] = ErrorList(
-                            ["Can only add personal records to selected collections"])
+                        self._errors['collections'] = ErrorList(["Can only add personal records to selected collections"])
                         del cleaned_data['collections']
                         return cleaned_data
             return cleaned_data
@@ -466,11 +456,10 @@ def data_import_file(request, file):
             if any(self.errors):
                 return
             _dcidentifier = Field.objects.get(name='identifier', standard__prefix='dc')
-            _identifier_ids = list(_dcidentifier.get_equivalent_fields().values_list('id', flat=True)) + [
-                _dcidentifier.id]
+            _identifier_ids = list(_dcidentifier.get_equivalent_fields().values_list('id', flat=True)) + [_dcidentifier.id]
             for i in range(self.total_form_count()):
                 if self.forms[i].cleaned_data['mapping'] and \
-                        (int(self.forms[i].cleaned_data['mapping']) in _identifier_ids):
+                    (int(self.forms[i].cleaned_data['mapping']) in _identifier_ids):
                     return
             raise forms.ValidationError, "At least one field must be mapped to an identifier field."
 
@@ -492,44 +481,41 @@ def data_import_file(request, file):
         if form.is_valid() and mapping_formset.is_valid():
 
             imp, preview_rows = analyze(available_collections.filter(id__in=form.cleaned_data['collections']),
-                                        form.cleaned_data['separator'],
-                                        dict((f.cleaned_data['fieldname'], f.cleaned_data['separate'])
-                                             for f in mapping_formset.forms),
-                                        available_fieldsets.get(id=form.cleaned_data['fieldset']) if int(
-                                            form.cleaned_data.get('fieldset') or 0) else None)
+                       form.cleaned_data['separator'],
+                       dict((f.cleaned_data['fieldname'], f.cleaned_data['separate'])
+                            for f in mapping_formset.forms),
+                       available_fieldsets.get(id=form.cleaned_data['fieldset']) if int(form.cleaned_data.get('fieldset') or 0) else None)
 
             store_settings(request.user,
                            'data_import_file_%s' % imp.field_hash,
-                           json.dumps(dict(options=form.cleaned_data, mapping=mapping_formset.cleaned_data)))
+                           simplejson.dumps(dict(options=form.cleaned_data, mapping=mapping_formset.cleaned_data)))
 
             if request.POST.get('import_button'):
                 j = JobInfo.objects.create(owner=request.user,
-                                           func='csvimport',
-                                           arg=json.dumps(dict(
-                                               file=_get_filename(request, file),
-                                               separator=form.cleaned_data['separator'],
-                                               collections=map(int, form.cleaned_data['collections']),
-                                               update=form.cleaned_data['update'],
-                                               add=form.cleaned_data['add'],
-                                               test=form.cleaned_data['test'],
-                                               personal=form.cleaned_data['personal'],
-                                               fieldset=form.cleaned_data['fieldset'],
-                                               mapping=dict(
-                                                   (f.cleaned_data['fieldname'], int(f.cleaned_data['mapping']))
-                                                   for f in mapping_formset.forms if f.cleaned_data['mapping']),
-                                               separate_fields=dict(
-                                                   (f.cleaned_data['fieldname'], f.cleaned_data['separate'])
-                                                   for f in mapping_formset.forms),
-                                               labels=dict((f.cleaned_data['fieldname'], f.cleaned_data['label'])
-                                                           for f in mapping_formset.forms),
-                                               order=dict((f.cleaned_data['fieldname'], int(f.cleaned_data['ORDER']))
-                                                          for f in mapping_formset.forms),
-                                               hidden=dict((f.cleaned_data['fieldname'], f.cleaned_data['hidden'])
-                                                           for f in mapping_formset.forms),
-                                           )
-                                           ))
+                                       func='csvimport',
+                                       arg=simplejson.dumps(dict(
+                                                file=_get_filename(request, file),
+                                                separator=form.cleaned_data['separator'],
+                                                collections=map(int, form.cleaned_data['collections']),
+                                                update=form.cleaned_data['update'],
+                                                add=form.cleaned_data['add'],
+                                                test=form.cleaned_data['test'],
+                                                personal=form.cleaned_data['personal'],
+                                                fieldset=form.cleaned_data['fieldset'],
+                                                mapping=dict((f.cleaned_data['fieldname'], int(f.cleaned_data['mapping']))
+                                                             for f in mapping_formset.forms if f.cleaned_data['mapping']),
+                                                separate_fields=dict((f.cleaned_data['fieldname'], f.cleaned_data['separate'])
+                                                                     for f in mapping_formset.forms),
+                                                labels=dict((f.cleaned_data['fieldname'], f.cleaned_data['label'])
+                                                             for f in mapping_formset.forms),
+                                                order=dict((f.cleaned_data['fieldname'], int(f.cleaned_data['ORDER']))
+                                                             for f in mapping_formset.forms),
+                                                hidden=dict((f.cleaned_data['fieldname'], f.cleaned_data['hidden'])
+                                                             for f in mapping_formset.forms),
+                                                )
+                                       ))
                 j.run()
-                messages.success(request, message='Import job has been submitted.')
+                request.user.message_set.create(message='Import job has been submitted.')
                 return HttpResponseRedirect("%s?highlight=%s" % (reverse('workers-jobs'), j.id))
         else:
             imp, preview_rows = analyze()
@@ -540,7 +526,7 @@ def data_import_file(request, file):
         key = 'data_import_file_%s' % imp.field_hash
         values = load_settings(request.user, key)
         if values.has_key(key):
-            value = json.loads(values[key][0])
+            value = simplejson.loads(values[key][0])
             mapping = value['mapping']
             options = value['options']
         else:
@@ -567,39 +553,37 @@ def record_preview(request, id):
     return render_to_response('data_previewrecord.html',
                               {'record': record,
                                'none': None,
-                              },
+                               },
                               context_instance=RequestContext(request))
-
 
 @login_required
 def manage_collections(request):
+
     collections = filter_by_access(request.user, Collection, manage=True)
 
     return render_to_response('data_manage_collections.html',
-                              {
-                                  'collections': collections,
-                              },
-                              context_instance=RequestContext(request))
-
+                          {
+                           'collections': collections,
+                          },
+                          context_instance=RequestContext(request))
 
 @login_required
 def manage_collection(request, id=None, name=None):
+
     if id and name:
         collection = get_object_or_404(filter_by_access(request.user, Collection, manage=True),
                                        id=id)
-    elif request.user.has_perm('data.add_collection'):
+    else:
         collection = Collection(title='Untitled')
         if not request.user.is_superuser:
             collection.owner = request.user
             collection.hidden = True
-    else:
-        raise Http404()
 
     class CollectionForm(forms.ModelForm):
 
         class UserField(forms.CharField):
 
-            widget = forms.TextInput(attrs={'class': 'autocomplete-user'})
+            widget=forms.TextInput(attrs={'class': 'autocomplete-user'})
 
             def prepare_value(self, value):
                 try:
@@ -619,10 +603,9 @@ def manage_collection(request, id=None, name=None):
                     raise ValidationError('User not found')
 
 
-        children = forms.ModelMultipleChoiceField(
-            queryset=filter_by_access(request.user, Collection).exclude(id=collection.id),
-            widget=forms.CheckboxSelectMultiple,
-            required=False)
+        children = forms.ModelMultipleChoiceField(queryset=filter_by_access(request.user, Collection).exclude(id=collection.id),
+                                                  widget=forms.CheckboxSelectMultiple,
+                                                  required=False)
         owner = UserField(widget=None if request.user.is_superuser else forms.HiddenInput, required=False)
 
         def clean_owner(self):
@@ -640,7 +623,7 @@ def manage_collection(request, id=None, name=None):
         if request.POST.get('delete-collection'):
             if not (request.user.is_superuser or request.user == collection.owner):
                 raise HttpResponseForbidden()
-            messages.success(request, message="Collection '%s' has been deleted." % collection.title)
+            request.user.message_set.create(message="Collection '%s' has been deleted." % collection.title)
             collection.delete()
             return HttpResponseRedirect(reverse('data-collections-manage'))
         else:
@@ -653,12 +636,11 @@ def manage_collection(request, id=None, name=None):
         form = CollectionForm(instance=collection)
 
     return render_to_response('data_collection_edit.html',
-                              {'form': form,
-                               'collection': collection,
-                               'can_delete': collection.id and (
-                               request.user.is_superuser or collection.owner == request.user),
-                              },
-                              context_instance=RequestContext(request))
+                          {'form': form,
+                           'collection': collection,
+                           'can_delete': collection.id and (request.user.is_superuser or collection.owner == request.user),
+                          },
+                          context_instance=RequestContext(request))
 
 
 @require_POST
@@ -668,9 +650,9 @@ def save_collection_visibility_preferences(request):
 
     if form.is_valid():
         if set_collection_visibility_preferences(request.user,
-                                                 form.cleaned_data['show_or_hide'],
-                                                 form.cleaned_data['collections']):
-            messages.success(request, message="Collection visibility preferences saved.")
+                                              form.cleaned_data['show_or_hide'],
+                                              form.cleaned_data['collections']):
+            request.user.message_set.create(message="Collection visibility preferences saved.")
 
     next = request.GET.get('next', reverse('main'))
     return HttpResponseRedirect(next)

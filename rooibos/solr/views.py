@@ -1,9 +1,3 @@
-from __future__ import absolute_import
-import socket
-import re
-import copy
-import random
-
 from django.db.models import Count
 from django.core.cache import cache
 from django.shortcuts import render_to_response, get_object_or_404
@@ -16,17 +10,29 @@ from django import forms
 from django.forms.formsets import formset_factory
 from django.db.models import Q
 from django.contrib.auth.models import User
-
-from rooibos.access.functions import filter_by_access
+from . import SolrIndex
+from pysolr import SolrError
+from rooibos.access import filter_by_access
+import socket
 from rooibos.util import safe_int, json_view, calculate_hash
 from rooibos.data.models import Field, Collection, FieldValue, Record
-from rooibos.data.functions import apply_collection_visibility_preferences, get_collection_visibility_preferences
+from rooibos.data.functions import apply_collection_visibility_preferences, \
+    get_collection_visibility_preferences
 from rooibos.storage.models import Storage
 from rooibos.ui import update_record_selection, clean_record_selection_vars
-from rooibos.federatedsearch.views import sidebar_api_raw, available_federated_sources
+from rooibos.federatedsearch.views import sidebar_api_raw
 
-from . import SolrIndex
-from .pysolr import SolrError
+from  rooibos.unitedsearch.common import *
+import rooibos.unitedsearch
+
+import re
+import copy
+import random
+import logging
+import string
+import json
+
+
 
 class SearchFacet(object):
 
@@ -46,10 +52,8 @@ class SearchFacet(object):
 
     def clean_result(self, hits):
         # sort facet items and remove the ones that match all hits
-        self.facets = filter(lambda f: f[1] < hits,
-                             getattr(self, 'facets', None) or [])
-        self.facets = sorted(self.facets,
-                             key=lambda f: len(f) > 2 and f[2] or f[0])
+        self.facets = filter(lambda f: f[1] < hits, getattr(self, 'facets', None) or [])
+        self.facets = sorted(self.facets, key=lambda f: len(f) > 2 and f[2] or f[0])
 
     def or_available(self):
         return True
@@ -59,10 +63,6 @@ class SearchFacet(object):
 
     def federated_search_query(self, value):
         return value.replace('|', ' ')
-
-    def fetch_facet_values(self):
-        return True
-
 
 class RecordDateSearchFacet(SearchFacet):
 
@@ -82,15 +82,10 @@ class RecordDateSearchFacet(SearchFacet):
         else:
             return value
 
-    def fetch_facet_values(self):
-        return False
-
-
 class OwnerSearchFacet(SearchFacet):
 
     def display_value(self, value):
-        value = '|'.join(User.objects.filter(
-            id__in=value.split('|')).values_list('username', flat=True))
+        value = '|'.join(User.objects.filter(id__in=value.split('|')).values_list('username', flat=True))
         return super(OwnerSearchFacet, self).display_value(value)
 
     def set_result(self, facets):
@@ -101,7 +96,6 @@ class OwnerSearchFacet(SearchFacet):
 
     def federated_search_query(self, value):
         return ''
-
 
 class RelatedToSearchFacet(SearchFacet):
 
@@ -120,14 +114,12 @@ class RelatedToSearchFacet(SearchFacet):
         return False
 
     def process_criteria(self, criteria, user, *args, **kwargs):
+        presentations = []
         record = Record.objects.filter(id=criteria)
         if record:
-            return '|'.join(
-                map(str, record[0].presentationitem_set.all().distinct()
-                    .values_list('presentation_id', flat=True)))
+            return '|'.join(map(str, record[0].presentationitem_set.all().distinct().values_list('presentation_id', flat=True)))
         else:
             return '-1'
-
 
 class StorageSearchFacet(SearchFacet):
 
@@ -138,11 +130,10 @@ class StorageSearchFacet(SearchFacet):
         self.available_storage = available_storage
 
     def process_criteria(self, criteria, user, *args, **kwargs):
-        criteria = '|'.join('s*-%s' % s for s in criteria.split('|'))
+        criteria = '|'.join('s*-%s' %s for s in criteria.split('|'))
         # TODO: need to handle case when no storage is available
-        return user.is_superuser and criteria or '(%s) AND (%s)' % (
-            ' '.join('s%s-*' % s for s in self.available_storage), criteria
-            )
+        return user.is_superuser and criteria \
+            or '(%s) AND (%s)' % (' '.join('s%s-*' % s for s in self.available_storage), criteria)
 
     def set_result(self, facets):
         result = {}
@@ -150,27 +141,23 @@ class StorageSearchFacet(SearchFacet):
             for f in facets.keys():
                 m = StorageSearchFacet._storage_facet_re.match(f)
                 if m and int(m.group(1)) in self.available_storage:
-                    # make facet available, but without frequency count
-                    result[m.group(2)] = None
+                    result[m.group(2)] = None  # make facet available, but without frequency count
         super(StorageSearchFacet, self).set_result(result)
 
     def federated_search_query(self, value):
         return ''
-
 
 class CollectionSearchFacet(SearchFacet):
 
     def set_result(self, facets):
         result = []
         if facets:
-            for id, title in Collection.objects.filter(
-                    id__in=map(int, facets.keys())).values_list('id', 'title'):
+            for id, title in Collection.objects.filter(id__in=map(int, facets.keys())).values_list('id', 'title'):
                 result.append((id, facets[str(id)], title))
         super(CollectionSearchFacet, self).set_result(result)
 
     def display_value(self, value):
-        value = '|'.join(Collection.objects.filter(
-            id__in=value.split('|')).values_list('title', flat=True))
+        value = '|'.join(Collection.objects.filter(id__in=value.split('|')).values_list('title', flat=True))
         return super(CollectionSearchFacet, self).display_value(value)
 
     def federated_search_query(self, value):
@@ -215,8 +202,7 @@ class OwnedTagSearchFacet(SearchFacet):
         return ''
 
 
-def _generate_query(search_facets, user, collection, criteria, keywords,
-                    selected, *exclude):
+def _generate_query(search_facets, user, collection, criteria, keywords, selected, *exclude):
 
     # add owned tag facet
     search_facets['ownedtag'] = OwnedTagSearchFacet()
@@ -228,21 +214,29 @@ def _generate_query(search_facets, user, collection, criteria, keywords,
         (f, o) = c.split(':', 1)
         if f.startswith('-'):
             f = 'NOT ' + f[1:]
-        fname = f.rsplit(' ', 1)[-1]
+        fname = f.rsplit(' ',1)[-1]
 
         # create exact match criteria on the fly if needed
-        if fname.endswith('_s') and not fname in search_facets:
+        if fname.endswith('_s') and not search_facets.has_key(fname):
             search_facets[fname] = ExactValueSearchFacet(fname)
 
-        if fname in search_facets:
+        if search_facets.has_key(fname):
             o = search_facets[fname].process_criteria(o, user)
             fields.setdefault(f, []).append('(' + o.replace('|', ' OR ') + ')')
 
-    fields = map(
-        lambda (name, crit): '%s:(%s)' % (
-            name, (name.startswith('NOT ') and ' OR ' or ' AND ').join(crit)),
-        fields.iteritems())
+    fields = map(lambda (name, crit): '%s:(%s)' % (name, (name.startswith('NOT ') and ' OR ' or ' AND ').join(crit)),
+                 fields.iteritems())
 
+    """
+    checks if the string is composed of whitespace only
+    solr breaks if this goes unchecked.
+    """
+    def not_space(keywords):
+	for char in keywords:
+	  if char not in string.whitespace:
+	    return True
+	return False
+	
     def build_keywords(q, k):
         k = k.lower()
         if k == 'and' or k == 'or':
@@ -251,30 +245,23 @@ def _generate_query(search_facets, user, collection, criteria, keywords,
             return q + ' ' + k
         else:
             return q + ' AND ' + k
-
-    if keywords:
-        keywords = reduce(build_keywords, keywords.split())
+    #TODO: make search empty when it is made up of only whitespace
+    if keywords and not_space(keywords): keywords = reduce(build_keywords, keywords.split())
 
     query = ''
     if fields:
         query = ' AND '.join(fields)
     if keywords:
-        if query:
-            query = '%s AND (%s)' % (query, keywords)
-        else:
-            query = '(%s)' % keywords
+        query = query and '%s AND (%s)' % (query, keywords) or '(%s)' % keywords
     if not query:
         query = '*:*'
     if collection:
         query = 'collections:%s AND %s' % (collection.id, query)
     if hasattr(selected, '__len__'):
-        query = 'id:(%s) AND %s' % (
-            ' '.join(map(str, selected or [-1])), query)
+        query = 'id:(%s) AND %s' % (' '.join(map(str, selected or [-1])), query)
 
     if not user.is_superuser:
-        collections = ' '.join(
-            map(str, filter_by_access(user, Collection).values_list(
-                'id', flat=True)))
+        collections = ' '.join(map(str, filter_by_access(user, Collection).values_list('id', flat=True)))
         c = []
         if collections:
             # access through readable collection when no record ACL set
@@ -288,8 +275,7 @@ def _generate_query(search_facets, user, collection, criteria, keywords,
                 )
             if groups:
                 groups = '((%s) AND NOT (%s)) OR ' % (groups, groups.upper())
-            c.append('acl_read:((%su%d) AND NOT U%d)' % (
-                groups, user.id, user.id))
+            c.append('acl_read:((%su%d) AND NOT U%d)' % (groups, user.id, user.id))
         else:
             # access through record ACL
             c.append('acl_read:anon')
@@ -301,15 +287,14 @@ def _generate_query(search_facets, user, collection, criteria, keywords,
     mode, ids = get_collection_visibility_preferences(user)
     if ids:
         query += ' AND %sallcollections:(%s)' % (
-            '-' if mode == 'show' else '',
-            ' '.join(map(str, ids)),
+                '-' if mode == 'show' else '',
+                ' '.join(map(str, ids)),
             )
 
     return query
 
 
 templates = dict(l='list', im='images')
-
 
 def run_search(user,
                collection=None,
@@ -323,18 +308,14 @@ def run_search(user,
                remove=None,
                produce_facets=False):
 
-    available_storage = list(filter_by_access(user, Storage).values_list(
-        'id', flat=True))
+    available_storage = list(filter_by_access(user, Storage).values_list('id', flat=True))
     exclude_facets = ['identifier']
-    fields = Field.objects.filter(standard__prefix='dc').exclude(
-        name__in=exclude_facets)
+    #fields = Field.objects.filter(standard__prefix='dc').exclude(name__in=exclude_facets)
+    fields = Field.objects.exclude(name__in=exclude_facets)
 
-    search_facets = [SearchFacet('tag', 'Tags')] + [
-        SearchFacet(field.name + '_t', field.label) for field in fields]
-    search_facets.append(
-        StorageSearchFacet('resolution', 'Image size', available_storage))
-    search_facets.append(
-        StorageSearchFacet('mimetype', 'Media type', available_storage))
+    search_facets = [SearchFacet('tag', 'Tags')] + [SearchFacet(field.name + '_t', field.label) for field in fields]
+    search_facets.append(StorageSearchFacet('resolution', 'Image size', available_storage))
+    search_facets.append(StorageSearchFacet('mimetype', 'Media type', available_storage))
     search_facets.append(CollectionSearchFacet('allcollections', 'Collection'))
     search_facets.append(OwnerSearchFacet('owner', 'Owner'))
     search_facets.append(RelatedToSearchFacet('presentations', 'Related to'))
@@ -343,18 +324,15 @@ def run_search(user,
     # convert to dictionary
     search_facets = dict((f.name, f) for f in search_facets)
 
-    query = _generate_query(search_facets, user, collection, criteria,
-                            keywords, selected, remove)
+    query = _generate_query(search_facets, user, collection, criteria, keywords, selected, remove)
 
     s = SolrIndex()
 
-    return_facets = [key for key, facet in search_facets.iteritems()
-                     if facet.fetch_facet_values()] if produce_facets else []
+    return_facets = search_facets.keys() if produce_facets else []
 
     try:
-        hits, records, facets = s.search(
-            query, sort=sort, rows=pagesize, start=(page - 1) * pagesize,
-            facets=return_facets, facet_mincount=1, facet_limit=100)
+        (hits, records, facets) = s.search(query, sort=sort, rows=pagesize, start=(page - 1) * pagesize,
+                                           facets=return_facets, facet_mincount=1, facet_limit=100)
     except SolrError:
         hits = -1
         records = None
@@ -370,13 +348,11 @@ def run_search(user,
 
     if orquery:
         (f, v) = orquery.split(':', 1)
-        orfacets = s.search(_generate_query(
-            search_facets, user, collection, criteria, keywords, selected,
-            remove, orquery),
-            rows=0, facets=[f], facet_mincount=1, facet_limit=100)[2]
+        orfacets = s.search(_generate_query(search_facets, user, collection, criteria, keywords, selected,
+                                            remove, orquery),
+                            rows=0, facets=[f], facet_mincount=1, facet_limit=100)[2]
         orfacet = copy.copy(search_facets[f])
-        orfacet.label = '%s in %s or...' % (v.replace("|", " or "),
-                                            orfacet.label)
+        orfacet.label = '%s in %s or...' % (v.replace("|", " or "), orfacet.label)
         orfacet.set_result(orfacets[f])
     else:
         orfacet = None
@@ -384,9 +360,17 @@ def run_search(user,
     return (hits, records, search_facets, orfacet, query, fields)
 
 
+
 def search(request, id=None, name=None, selected=False, json=False):
-    collection = get_object_or_404(
-        filter_by_access(request.user, Collection), id=id) if id else None
+    
+    #print "solr search\n\n\n!!!!!!\n\n\n"
+    collection = id and get_object_or_404(filter_by_access(request.user, Collection), id=id) or None
+    
+    """
+    #print "------------------------------------------------------view.search----------------------------"
+    #print "request"
+    #print request
+    """
 
     if request.method == "POST":
         update_record_selection(request)
@@ -396,9 +380,7 @@ def search(request, id=None, name=None, selected=False, json=False):
         q = clean_record_selection_vars(q)
         for i, v in q.items():
             if i != 'c':
-                # replace multiple values with last one
-                # except for criteria ('c')
-                q[i] = v
+                q[i] = v  # replace multiple values with last one except for criteria ('c')
         q.pop('v.x', None)
         q.pop('v.y', None)
         q.pop('x', None)
@@ -408,9 +390,9 @@ def search(request, id=None, name=None, selected=False, json=False):
     # get parameters relevant for search
     criteria = request.GET.getlist('c')
     remove = request.GET.get('rem', None)
-    if remove and remove in criteria:
-        criteria.remove(remove)
+    if remove and remove in criteria: criteria.remove(remove)
     keywords = request.GET.get('kw', '')
+    #print [ item.encode('ascii') for item in ast.literal_eval(keywords) ]
 
     # get parameters relevant for view
 
@@ -421,30 +403,28 @@ def search(request, id=None, name=None, selected=False, json=False):
         pagesize = max(min(safe_int(request.GET.get('ps', '30'), 30), 50), 5)
     page = safe_int(request.GET.get('page', '1'), 1)
     sort = request.GET.get('s', 'title_sort').lower()
-    if not sort.endswith(" asc") and not sort.endswith(" desc"):
-        sort += " asc"
+    if not sort.endswith(" asc") and not sort.endswith(" desc"): sort += " asc"
 
     orquery = request.GET.get('or', None)
     user = request.user
 
-    if 'action' in request.GET:
+    if request.GET.has_key('action'):
         page = safe_int(request.GET.get('op', '1'), 1)
 
     if selected:
         selected = request.session.get('selected_records', ())
+	
+	
+    (hits, records, search_facets, orfacet, query, fields) = run_search(user, collection, criteria, keywords, sort, page, pagesize,
+                                                         orquery, selected, remove, produce_facets=False)
 
-    hits, records, search_facets, orfacet, query, fields = run_search(
-        user, collection, criteria, keywords, sort, page, pagesize,
-        orquery, selected, remove, produce_facets=False)
-
+    #print "solr.views 414 criteria %s keywords %s hits %s records %s" %(criteria, keywords, hits, records)
     if json:
         return (hits, records, viewmode)
 
     if collection:
-        url = reverse('solr-search-collection',
-                      kwargs={'id': collection.id, 'name': collection.name})
-        furl = reverse('solr-search-collection-facets',
-                       kwargs={'id': collection.id, 'name': collection.name})
+        url = reverse('solr-search-collection', kwargs={'id': collection.id, 'name': collection.name})
+        furl = reverse('solr-search-collection-facets', kwargs={'id': collection.id, 'name': collection.name})
     elif hasattr(selected, '__len__'):
         url = reverse('solr-selected')
         furl = reverse('solr-selected-facets')
@@ -467,12 +447,15 @@ def search(request, id=None, name=None, selected=False, json=False):
     q['v'] = q.get('v', 'thumb')
     q.setlist('c', criteria)
     hiddenfields = [('op', page)]
+    #for f in q:
+    #    if f != 'kw':
+    #        for l in q.getlist(f):
+    #            hiddenfields.append((f, l))
     qurl = q.urlencode()
     q.setlist('c', filter(lambda c: c != orquery, criteria))
     qurl_orquery = q.urlencode()
     limit_url = "%s?%s%s" % (url, qurl, qurl and '&' or '')
-    limit_url_orquery = "%s?%s%s" % (
-        url, qurl_orquery, qurl_orquery and '&' or '')
+    limit_url_orquery = "%s?%s%s" % (url, qurl_orquery, qurl_orquery and '&' or '')
     facets_url = "%s?%s%s" % (furl, qurl, qurl and '&' or '')
 
     form_url = "%s?%s" % (url, q.urlencode())
@@ -487,34 +470,32 @@ def search(request, id=None, name=None, selected=False, json=False):
         q['page'] = page + 1
         next_page_url = "%s?%s" % (url, q.urlencode())
 
+
     def readable_criteria(c):
         (f, o) = c.split(':', 1)
         negated = f.startswith('-')
         f = f[1 if negated else 0:]
-        if f in search_facets:
-            return dict(
-                facet=c,
-                term=search_facets[f].display_value(o),
-                label=search_facets[f].label,
-                negated=negated,
-                or_available=not negated and search_facets[f].or_available(),
-                )
+        if search_facets.has_key(f):
+            return dict(facet=c,
+                        term=search_facets[f].display_value(o),
+                        label=search_facets[f].label,
+                        negated=negated,
+                        or_available=not negated and search_facets[f].or_available())
         else:
-            return dict(
-                facet=c,
-                term=o,
-                label='Unknown criteria',
-                negated=negated,
-                or_available=False,
-                )
+            return dict(facet=c,
+                        term=o,
+                        label='Unknown criteria',
+                        negated=negated,
+                        or_available=False)
 
     def reduce_federated_search_query(q, c):
         (f, o) = c.split(':', 1)
-        if f.startswith('-') or f not in search_facets:
+        if f.startswith('-') or not search_facets.has_key(f):
             # can't negate in federated search
             return q
         v = search_facets[f].federated_search_query(o)
         return v if not q else '%s %s' % (q, v)
+
 
     mode, ids = get_collection_visibility_preferences(user)
     hash = calculate_hash(getattr(user, 'id', 0),
@@ -526,64 +507,149 @@ def search(request, id=None, name=None, selected=False, json=False):
                           mode,
                           str(ids),
                           )
-
+    #print hash
     facets = cache.get('search_facets_html_%s' % hash)
 
     sort = sort.startswith('random') and 'random' or sort.split()[0]
     sort = sort.endswith('_sort') and sort[:-5] or sort
-
-    federated_search_query = reduce(
-        reduce_federated_search_query, criteria, keywords)
+    
+    federated_search_query = reduce(reduce_federated_search_query, criteria, keywords)
     federated_search = sidebar_api_raw(
-        request, federated_search_query, cached_only=True
-        ) if federated_search_query else None
+        request, federated_search_query, cached_only=True) if federated_search_query else None
 
-    return render_to_response('results.html', {
-        'criteria': map(readable_criteria, criteria),
-        'query': query,
-        'keywords': keywords,
-        'hiddenfields': hiddenfields,
-        'records': records,
-        'hits': hits,
-        'page': page,
-        'pages': (hits - 1) / pagesize + 1,
-        'pagesize': pagesize,
-        'prev_page': prev_page_url,
-        'next_page': next_page_url,
-        'reset_url': url,
-        'form_url': form_url,
-        'limit_url': limit_url,
-        'limit_url_orquery': limit_url_orquery,
-        'facets': facets,
-        'facets_url': facets_url,
-        'orfacet': orfacet,
-        'orquery': orquery,
-        'sort': sort,
-        'random': random.random(),
-        'viewmode': viewmode,
-        'federated_sources': bool(available_federated_sources(request.user)),
-        'federated_search': federated_search,
-        'federated_search_query': federated_search_query,
-        'pagination_helper': [None] * hits,
-        'has_record_created_criteria': any(
-            f.startswith('created:') for f in criteria),
-        'has_last_modified_criteria': any(
-            f.startswith('modified:') for f in criteria),
-        },
-        context_instance=RequestContext(request))
+    
+    query_string = ""
+    """if len(criteria)>0 :
+      query_string += "search=advance "
+    else :
+      query_string += "search=simple "
+    """
+    query_list = {}
+    
+    crit_pattern = re.compile("(?P<type>.*?(\_t)?):\"?(?P<value>.*?)\"?$")
+    #crit_pattern = re.compile("(?P<type>.*?\_t):(?P<value>.*?)")
+
+    for c in criteria :
+      m = crit_pattern.match(c)
+      add_to_dict(query_list,str(m.group('type')),str(m.group('value')).replace(" ",'+').replace("\"",''))
+      """
+      if query_list.has_key(str(m.group('type'))) :
+        query_list.update({str(m.group('type')):query_list[str(m.group('type'))]+"%26\""+str(m.group('value')).replace(" ",'+').replace("\"",'')+"\""})
+      else:
+        query_list.update({str(m.group('type')):"\""+str(m.group('value')).replace(" ",'+').replace("\"",'')+"\""})
+      """
+      
+    """
+    #print "keywords is"
+    #print keywords
+    """
+
+    kws_list = re.split('(-?\".*?\")',keywords)
+    while "" in kws_list:
+        kws_list.remove("")
+    while " " in kws_list:
+        kws_list.remove(" ")
+
+    kws=""
+    kws_not = ""
+    query_terms=""
+    
+    for kw in kws_list:
+            kw = kw.replace("\"","")
+            if kw is '':	# empty search
+                pass	# nothing to do
+            elif "=" in kw:
+                if not query_terms == "":
+                    query_terms += ", "
+                query_terms += kw
+            elif kw[0]=='-':
+                kw = kw.replace('\"','')
+                if kws_not is "":
+                    kws_not += kw.replace('-','')
+                else :
+                    kws_not += "+"+kw.replace('-','')
+            else:
+                kw = kw.replace('\"','')
+                if kws is "":
+                    kws += kw
+                else:
+                    kws += "+"+kw 
+	
+    #print "kws = "
+    #print kws
+    #print "kws_not ="
+    #print kws_not
+    
+ 
+    if kws.startswith("keywords="):
+        kws = kws.replace("keywords=","")
+    while kws.endswith('\\'):
+        kws = kws[:-1]
+    query_string += "keywords=" + kws
+    query_string = query_string.replace('\"','')
+    
+  #  query_string += ";"+str(query_list)
+    
+    
+
+    for key in query_list.keys() :
+      value = query_list[key]
+      for v in value:
+        while v.endswith('\\'):
+            v = v[:-1]
+        q = key+"="+v
+        query_string = query_string+','+q.replace("\"", "").replace('_t','')
+
+    if not query_terms is '':
+        query_string += ', '+query_terms
+    if not kws_not is '':
+      query_string += ', '+"-="+kws_not
+    
+    #print "\n\n\n\n\n--------------------------Query String is:----s----------------------------"
+    #print query_string+"\n\n\n\n\n"
+ 
+
+    return render_to_response('results.html',
+                          {'criteria': map(readable_criteria, criteria),
+                           'query': query_string,
+                           'keywords': kws,#keywords,
+                           'hiddenfields': hiddenfields,
+                           'records': records,
+                           'hits': hits,
+                           'page': page,
+                           'pages': (hits - 1) / pagesize + 1,
+                           'pagesize': pagesize,
+                           'prev_page': prev_page_url,
+                           'next_page': next_page_url,
+                           'reset_url': url,
+                           'form_url': form_url,
+                           'limit_url': limit_url,
+                           'limit_url_orquery': limit_url_orquery,
+                           'facets': facets,
+                           'facets_url': facets_url,
+                           'orfacet': orfacet,
+                           'orquery': orquery,
+                           'sort': sort,
+                           'random': random.random(),
+                           'viewmode': viewmode,
+                           'federated_search': federated_search,
+                           'federated_search_query':query_string,
+                           'pagination_helper': [None] * hits,
+                           'has_record_created_criteria': any(f.startswith('created:') for f in criteria),
+                           'has_last_modified_criteria': any(f.startswith('modified:') for f in criteria),
+                           },
+                          context_instance=RequestContext(request))
 
 
 @json_view
 def search_facets(request, id=None, name=None, selected=False):
 
-    collection = get_object_or_404(
-        filter_by_access(request.user, Collection), id=id) if id else None
+    collection = id and get_object_or_404(filter_by_access(request.user, Collection), id=id) or None
 
     # get parameters relevant for search
     criteria = request.GET.getlist('c')
     remove = request.GET.get('rem', None)
-    if remove and remove in criteria:
-        criteria.remove(remove)
+    if remove and remove in criteria: criteria.remove(remove)
     keywords = request.GET.get('kw', '')
 
     user = request.user
@@ -591,13 +657,11 @@ def search_facets(request, id=None, name=None, selected=False):
     if selected:
         selected = request.session.get('selected_records', ())
 
-    (hits, records, search_facets, orfacet, query, fields) = run_search(
-        user, collection, criteria, keywords, selected=selected, remove=remove,
-        produce_facets=True)
+    (hits, records, search_facets, orfacet, query, fields) = run_search(user, collection, criteria, keywords,
+                                                         selected=selected, remove=remove, produce_facets=True)
 
     if collection:
-        url = reverse('solr-search-collection',
-                      kwargs={'id': collection.id, 'name': collection.name})
+        url = reverse('solr-search-collection', kwargs={'id': collection.id, 'name': collection.name})
     elif selected:
         url = reverse('solr-selected')
     else:
@@ -624,13 +688,12 @@ def search_facets(request, id=None, name=None, selected=False):
     # remove facets with only no filter options
     facets = filter(lambda f: len(f.facets) > 0, facets)
 
-    html = render_to_string(
-        'results_facets.html',
-        {
-            'limit_url': limit_url,
-            'facets': facets
-        },
-        context_instance=RequestContext(request))
+    html = render_to_string('results_facets.html',
+                          {
+                           'limit_url': limit_url,
+                           'facets': facets
+                           },
+                          context_instance=RequestContext(request))
 
     mode, ids = get_collection_visibility_preferences(user)
     hash = calculate_hash(getattr(user, 'id', 0),
@@ -653,112 +716,130 @@ def search_json(request, id=None, name=None, selected=False):
 
     hits, records, viewmode = search(request, id, name, selected, json=True)
 
-    html = render_to_string(
-        'results_bare_' + templates.get(viewmode, 'icons') + '.html',
-        {
-            'records': records,
-            'selectable': True,
-        },
-        context_instance=RequestContext(request))
+    html = render_to_string('results_bare_' + templates.get(viewmode, 'icons') + '.html',
+                              {'records': records,
+                               'selectable': True,},
+                              context_instance=RequestContext(request))
 
     return dict(html=html)
 
 
+# get all database records from collection with specified field and value and display as search results
+def find_in_db(request, collection_id=None, field_id=None, value=None):
+    
+    collection = collection_id and get_object_or_404(filter_by_access(request.user, Collection), id=collection_id) or None
+
+    if field_id:
+        field = get_object_or_404(Field, id=field_id)
+    if request.method == "POST":
+        raise NotImplementedError("Can't post to find_in_db")
+
+    user = request.user
+
+
+    #values = FieldValue.objects.filter(field=field, value=value, record__collection=collection)
+    record_ids = FieldValue.objects.filter(field=field, value=value, record__collection=collection).values_list('record', flat=True)
+    
+    records = Record.objects.filter(id__in=record_ids) #.values_list('tmp_extthumb', 'name', 'source')
+    
+    keys = ['thumb_url', 'title', 'record_url']
+    dicts = []
+    #iterate through the list of records and grab every attribute you need
+    #for r in records:
+    #get all the values and do a reverse lookup of the collection
+    #manually build the dict and then pass it to the searcher-results.html
+    for r in records:
+        thumb_url = r.get_thumbnail_url()
+        title = r.title
+        #get the url for the record?
+        record_location = r.get_absolute_url()
+        record_list = [thumb_url, title, record_location]
+        dicts.append(dict(zip(keys, record_list)))
+    #for value_set in records:
+    #    dicts.append(dict(zip(keys,value_set)))
+     
+    related_pages = [{"url": 'solr-browse', "title": "Back to Browse"}]
+    return render_to_response('searcher-results.html',
+	{'results': dicts,
+	'hits': len(records),		# TODO, make this use count (more efficient)
+	'browse': True,
+	'searcher_name': collection},
+	context_instance=RequestContext(request))
+    
+    
+  
+# Browse downloaded images
 def browse(request, id=None, name=None):
+
     collections = filter_by_access(request.user, Collection)
-    collections = apply_collection_visibility_preferences(request.user,
-                                                          collections)
-    collections = collections.annotate(
-        num_records=Count('records')).filter(
-        num_records__gt=0).order_by('title')
+    collections = apply_collection_visibility_preferences(request.user, collections)
+    collections = collections.annotate(num_records=Count('records')).filter(num_records__gt=0).order_by('title')
 
     if not collections:
-        return render_to_response(
-            'browse.html',
-            {},
-            context_instance=RequestContext(request))
+        return render_to_response('browse.html',
+                              {},
+                              context_instance=RequestContext(request))
 
-    if 'c' in request.GET:
+    if request.GET.has_key('c'):
         collection = get_object_or_404(collections, name=request.GET['c'])
-        return HttpResponseRedirect(reverse(
-            'solr-browse-collection',
-            kwargs={'id': collection.id, 'name': collection.name}))
+        return HttpResponseRedirect(reverse('solr-browse-collection',
+                                            kwargs={'id': collection.id, 'name': collection.name}))
 
     collection = id and get_object_or_404(collections, id=id) or collections[0]
-
+    
     fields = cache.get('browse_fields_%s' % collection.id)
     if fields:
         fields = list(Field.objects.filter(id__in=fields))
     else:
-        ids = list(FieldValue.objects.filter(
-            record__collection=collection).order_by().distinct()
-            .values_list('field_id', flat=True))
-        fields = list(Field.objects.filter(id__in=ids))
-        cache.set('browse_fields_%s' % collection.id,
-                  [f.id for f in fields], 60)
+        fields = list(Field.objects.filter(fieldvalue__record__collection=collection).distinct())
+        cache.set('browse_fields_%s' % collection.id, [f.id for f in fields], 60)
 
     if not fields:
         raise Http404()
 
-    if 'f' in request.GET:
+    if request.GET.has_key('f'):
         try:
-            field = get_object_or_404(Field, id=request.GET['f'],
-                                      id__in=(f.id for f in fields))
+            field = get_object_or_404(Field, id=request.GET['f'], id__in=(f.id for f in fields))
         except ValueError:
-            # GET['f'] was text previously and external links exist
-            # that are no longer valid
-            return HttpResponseRedirect(
-                reverse('solr-browse-collection',
-                        kwargs={'id': collection.id, 'name': collection.name}))
+            # GET['f'] was text previously and external links exist that are no longer valid
+            return HttpResponseRedirect(reverse('solr-browse-collection',
+                                        kwargs={'id': collection.id, 'name': collection.name}))
     else:
         field = fields[0]
 
-    values = FieldValue.objects.filter(
-        field=field,
-        record__collection=collection).values('value').annotate(
-        freq=Count('value', distinct=False)).order_by('value')
+    values = FieldValue.objects.filter(field=field, record__collection=collection).values('value').annotate(freq=Count('value', distinct=False)).order_by('value')
+    #print "solr.views 741 collection %s field %s manager %s" %(collection, field.__class__.__name__, FieldValue.objects)
 
-    if 's' in request.GET:
+    if request.GET.has_key('s'):
         start = values.filter(value__lt=request.GET['s']).count() / 50 + 1
-        return HttpResponseRedirect(reverse(
-            'solr-browse-collection',
-            kwargs={'id': collection.id, 'name': collection.name}) +
-            "?f=%s&page=%s" % (field.id, start))
+        return HttpResponseRedirect(reverse('solr-browse-collection',
+                                            kwargs={'id': collection.id, 'name': collection.name}) +
+                                    "?f=%s&page=%s" % (field.id, start))
 
-    return render_to_response(
-        'browse.html',
-        {
-            'collections': collections,
-            'selected_collection': collection and collection or None,
-            'fields': fields,
-            'selected_field': field,
-            'values': values,
-        },
-        context_instance=RequestContext(request))
+    return render_to_response('browse.html',
+                              {'collections': collections,
+                               'selected_collection': collection and collection or None,
+                               'fields': fields,
+                               'selected_field': field,
+                               'values': values,},
+                              context_instance=RequestContext(request))
 
 
+                                 
 def overview(request):
 
     collections = filter_by_access(request.user, Collection)
-    collections = apply_collection_visibility_preferences(
-        request.user, collections)
-    collections = collections.order_by('title').annotate(
-        num_records=Count('records'))
+    collections = apply_collection_visibility_preferences(request.user, collections)
+    collections = collections.order_by('title').annotate(num_records=Count('records'))
 
-    return render_to_response(
-        'overview.html',
-        {
-            'collections': collections,
-        },
-        context_instance=RequestContext(request))
+    return render_to_response('overview.html',
+                              {'collections': collections,},
+                              context_instance=RequestContext(request))
 
 
 def fieldvalue_autocomplete(request):
     collection_ids = request.GET.get('collections')
-    if collection_ids:
-        q = Collection.objects.filter(id__in=collection_ids.split(','))
-    else:
-        q = Collection
+    q = collection_ids and Collection.objects.filter(id__in=collection_ids.split(',')) or Collection
     collections = filter_by_access(request.user, q)
     if not collections:
         raise Http404()
@@ -767,11 +848,9 @@ def fieldvalue_autocomplete(request):
         limit = min(int(request.GET.get('limit', '10')), 100)
         field = request.GET.get('field')
         q = field and Q(field__id=field) or Q()
-        values = FieldValue.objects.filter(
-            q,
-            record__collection__in=collections,
-            index_value__istartswith=query).values_list(
-            'value', flat=True).distinct()[:limit]
+        values = FieldValue.objects.filter(q, record__collection__in=collections, index_value__istartswith=query) \
+            .values_list('value', flat=True).distinct()[:limit] #.order_by('value')
+        #print values.query.as_sql()
         values = '\n'.join(urlquote(v) for v in values)
     else:
         values = ''
@@ -779,46 +858,37 @@ def fieldvalue_autocomplete(request):
 
 
 def search_form(request):
-
     collections = filter_by_access(request.user, Collection)
-    collections = apply_collection_visibility_preferences(
-        request.user, collections)
-    
-	# ----------------------------- #
-	#								#
-	#if not collections:			#
-    #    raise Http404()			#
-	#								#
-	# ----------------------------- #
-	
+    collections = apply_collection_visibility_preferences(request.user, collections)
+    #TODO why is this here??
+    #if not collections:
+    #        raise Http404()
+
     def _get_fields():
-        return Field.objects.select_related('standard').all().order_by(
-            'standard__title', 'name')
+	#f = Field.objects.select_related('standard')
+	#print 'YYYYY'
+	#for ff in f :
+	#  if not ff.standard is 'United Search':
+	#    f.remove(ff)
+        #return Field.objects.select_related('standard').filter(standard='United Search', ).order_by('standard__title', 'name')
+        return Field.objects.filter(standard=4).order_by('standard__title', 'id')
 
     def _cmp(x, y):
-        if x == "Other":
-            return 1
-        if y == "Other":
-            return -1
+        if x == "Other": return 1
+        if y == "Other": return -1
         return cmp(x, y)
 
     def _field_choices():
         grouped = {}
         for f in _get_fields():
-            grouped.setdefault(
-                f.standard.title if f.standard else 'Other', []).append(f)
-        return [('', 'Any')] + [
-            (g, [(f.id, f.label) for f in grouped[g]])
-            for g in sorted(grouped, _cmp)
-            ]
+            grouped.setdefault(f.standard and f.standard.title or 'Other', []).append(f)
+        return [('', 'Any')] + [(g, [(f.id, f.label) for f in grouped[g]]) for g in sorted(grouped, _cmp)]
 
     class SearchForm(forms.Form):
         TYPE_CHOICES = (('t', 'in'), ('T', 'not in'))
         criteria = forms.CharField(required=False)
-        type = forms.ChoiceField(
-            choices=TYPE_CHOICES, required=False, label='')
-        field = forms.ChoiceField(
-            choices=_field_choices(), required=False, label='')
+        type = forms.ChoiceField(choices=TYPE_CHOICES, required=False, label='')
+        field = forms.ChoiceField(choices=_field_choices(), required=False, label='')
 
     def _collection_choices():
         result = []
@@ -831,10 +901,9 @@ def search_form(request):
         return result
 
     class CollectionForm(forms.Form):
-        collections = forms.MultipleChoiceField(
-            choices=_collection_choices(),
-            widget=forms.CheckboxSelectMultiple,
-            required=False)
+        collections = forms.MultipleChoiceField(choices=_collection_choices(),
+                                                widget=forms.CheckboxSelectMultiple,
+                                                required=False)
 
     SearchFormFormSet = formset_factory(form=SearchForm, extra=5)
 
@@ -842,9 +911,7 @@ def search_form(request):
         collectionform = CollectionForm(request.POST, prefix='coll')
         formset = SearchFormFormSet(request.POST, prefix='crit')
         if formset.is_valid() and collectionform.is_valid():
-            core_fields = dict(
-                (f, f.get_equivalent_fields())
-                for f in Field.objects.filter(standard__prefix='dc'))
+            core_fields = dict((f, f.get_equivalent_fields()) for f in Field.objects.filter(standard__prefix='dc'))
             query = []
             keywords = []
             for form in formset.forms:
@@ -858,15 +925,9 @@ def search_form(request):
                             if field == cf or field in cfe:
                                 field = cf
                                 break
-                        query.append('c=%s%s_%s:"%s"' % (
-                            type.isupper() and '-' or '',
-                            field.name,
-                            type.lower(),
-                            urlquote(criteria)))
+                        query.append('c=%s%s_%s:"%s"' % (type.isupper() and '-' or '', field.name, type.lower(), urlquote(criteria)))
                     else:
-                        keywords.append('%s"%s"' % (
-                            type.isupper() and '-' or '',
-                            urlquote(criteria)))
+                        keywords.append('%s"%s"' % (type.isupper() and '-' or '', urlquote(criteria)))
             collections = collectionform.cleaned_data['collections']
             if collections:
                 query.append('c=allcollections:%s' % '|'.join(collections))
