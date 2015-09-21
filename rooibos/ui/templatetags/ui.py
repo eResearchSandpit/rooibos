@@ -57,8 +57,8 @@ def scale(value, params):
 
 
 class OwnedTagsForObjectNode(template.Node):
-    def __init__(self, object, user, var_name, include=True):
-        self.object = object
+    def __init__(self, obj, user, var_name, include=True):
+        self.object = obj
         self.user = user
         self.var_name = var_name
         self.include = include

@@ -22,6 +22,7 @@ from tagging.models import Tag
 from django.views.decorators.csrf import csrf_exempt
 
 
+
 # urls for easy reference
 
     # url(r'^search/$', api_search),
@@ -400,3 +401,29 @@ def autocomplete_group(request):
         groups.extend(Group.objects.filter(~Q(name__istartswith=query), name__icontains=query)
                      .order_by('name').values_list('name', flat=True)[:limit - len(groups)])
     return HttpResponse(content='\n'.join(groups))
+
+
+# commented out this file rest_framework lines are for future development of the MDID3 api
+
+
+# from rooibos.api.serializers import RecordSerializer
+# from rest_framework import viewsets
+# from rest_framework import permissions
+#
+#
+# class IsOwnerOrReadOnly(permissions.BasePermission):
+#     def has_object_permission(self, request, view, obj):
+#         if request.method in permissions.SAFE_METHODS:
+#             return True
+#         else:
+#             return obj.owner == request.user
+#
+#
+# class RecordViewSet(viewsets.ModelViewSet):
+#     queryset = Record.objects.all()
+#     serializer_class = RecordSerializer
+#     # probably delete this next part
+#     permission_classes = (IsOwnerOrReadOnly,)
+#
+#     def pre_save(self, obj):
+#         obj.owner = self.request.user

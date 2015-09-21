@@ -1,45 +1,33 @@
 from __future__ import absolute_import
 import logging
-# import base64
 
-from django.http import HttpResponse, HttpResponseRedirect, QueryDict, Http404
+from django.http import HttpResponseRedirect, Http404
 from django.template import RequestContext
 from django.core.urlresolvers import reverse
 from django.shortcuts import get_object_or_404, render_to_response
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
-from django.forms.models import modelformset_factory, BaseModelFormSet, ModelForm
+from django.forms.models import modelformset_factory, ModelForm
 from django.db.models.aggregates import Count
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
-#from django.db import backend
-from django.db import connection
 from django import forms
 from django.views.decorators.http import require_POST
 from django.contrib import messages
-# from django.core.paginator import Paginator
-# from django.contrib.auth.models import Permission
-
 from tagging.models import Tag, TaggedItem
-from tagging.forms import TagField
-from tagging.utils import parse_tag_input
+
 from rooibos.util.models import OwnedWrapper
 from rooibos.access.functions import filter_by_access
-from rooibos.util import json_view
-from rooibos.storage.models import ProxyUrl
 from rooibos.data.models import FieldSet, Record
 from rooibos.data.forms import FieldSetChoiceField
 from rooibos.ui.actionbar import update_actionbar_tags
 from rooibos.access.models import ExtendedGroup, AUTHENTICATED_GROUP, AccessControl
 from rooibos.userprofile.views import load_settings, store_settings
-
 from .models import Presentation, PresentationItem
 from .functions import duplicate_presentation
 
+log = logging.getLogger(__name__)
 
-
-# todo: no log statements in file; remove logging?
-log = logging.getLogger('rooibos')
 
 @login_required
 def create(request):
@@ -80,7 +68,7 @@ def create(request):
                                'next': next,
                                'selected': selected,
                                'existing_tags': existing_tags,
-                              },
+                               },
                               context_instance=RequestContext(request))
 
 
@@ -114,7 +102,6 @@ def edit(request, id, name):
                                    max_length=Presentation._meta.get_field('password').max_length)
         fieldset = FieldSetChoiceField(label='Field set', user=presentation.owner)
         hide_default_data = forms.BooleanField(label='Hide default data', required=False)
-
 
     class BaseOrderingForm(ModelForm):
         record = forms.CharField(widget=forms.HiddenInput)
@@ -172,7 +159,7 @@ def edit(request, id, name):
             presentation.description = form.cleaned_data['description']
             presentation.password = form.cleaned_data['password']
             presentation.fieldset = FieldSet.for_user(presentation.owner).get(id=form.cleaned_data['fieldset']) if \
-            form.cleaned_data['fieldset'] else None
+                form.cleaned_data['fieldset'] else None
             presentation.hide_default_data = form.cleaned_data['hide_default_data']
             presentation.save()
             messages.success(request, message="Changes to presentation saved successfully.")
@@ -185,7 +172,7 @@ def edit(request, id, name):
                                        'hidden': presentation.hidden,
                                        'fieldset': presentation.fieldset.id if presentation.fieldset else None,
                                        'hide_default_data': presentation.hide_default_data,
-        })
+                                       })
 
     contenttype = ContentType.objects.get_for_model(Presentation)
     return render_to_response('presentation_properties.html',
@@ -195,7 +182,7 @@ def edit(request, id, name):
                                'form': form,
                                'selected_tags': [tag.name for tag in tags],
                                'usertags': existing_tags if len(existing_tags) > 0 else None,
-                              },
+                               },
                               context_instance=RequestContext(request))
 
 
@@ -312,23 +299,27 @@ def browse(request, manage=False):
         return HttpResponseRedirect(request.path + '?' + get.urlencode())
 
     active_tags = tags
-    active_presenter = presenter
-
-    def col(model, field):
-        # django.db.backend has been removed
-        # qn = backend.DatabaseOperations(model).quote_name
-        backend_name = connection.vendor.lower()
-        qn = backend_name.DatabaseOperations(model).quote_name
-        return '%s.%s' % (qn(model._meta.db_table), qn(model._meta.get_field(field).column))
+    # active_presenter = presenter
 
     if presentations and not manage:
-        q = OwnedWrapper.objects.extra(
-            tables=(Presentation._meta.db_table,),
-            where=('%s=%s' % (col(OwnedWrapper, 'object_id'), col(Presentation, 'id')),
-                   '%s=%s' % (col(OwnedWrapper, 'user'), col(Presentation, 'owner')))).filter(
-            object_id__in=presentations.values('id'),
-            content_type=OwnedWrapper.t(Presentation))
-        tags = Tag.objects.usage_for_queryset(q, counts=True)
+
+        # Note -  replaced below 6 LOC with batteries-included django-tagging functionality
+        #         leaving in commented-out until identical behavior is verified.
+        # see right above: http://django-tagging.readthedocs.org/en/develop/#tag-input
+
+        # q = OwnedWrapper.objects.extra(
+        #     tables=(Presentation._meta.db_table,),
+        #     where=('%s=%s' % (col(OwnedWrapper, 'object_id'), col(Presentation, 'id')),
+        #            '%s=%s' % (col(OwnedWrapper, 'user'), col(Presentation, 'owner')))).filter(
+        #     object_id__in=presentations.values('id'),
+        #     content_type=OwnedWrapper.t(Presentation))
+
+        # tags = Tag.objects.usage_for_queryset(q, counts=True)
+
+        tags = Tag.objects.usage_for_model(OwnedWrapper,
+                                           filters=dict(
+                                               user_id=User.objects.get(username=request.user.username).id,
+                                               content_type_id=ContentType.objects.get(model='presentation').id))
 
         for p in presentations:
             p.verify_password(request)
@@ -362,7 +353,7 @@ def browse(request, manage=False):
                                'presentations': presentations,
                                'presenters': presenters if len(presenters) > 1 else None,
                                'keywords': keywords,
-                              },
+                               },
                               context_instance=RequestContext(request))
 
 
@@ -393,7 +384,7 @@ def password(request, id, name):
                               {'form': form,
                                'presentation': presentation,
                                'next': request.GET.get('next', reverse('presentation-browse')),
-                              },
+                               },
                               context_instance=RequestContext(request))
 
 
@@ -402,7 +393,7 @@ def password(request, id, name):
 def duplicate(request, id, name):
     presentation = get_object_or_404(
         filter_by_access(request.user, Presentation, write=True, manage=True).
-        filter(id=id))
+            filter(id=id))
     dup = duplicate_presentation(presentation, request.user)
     return HttpResponseRedirect(reverse('presentation-edit',
                                         args=(dup.id, dup.name)))
@@ -416,5 +407,5 @@ def record_usage(request, id, name):
     return render_to_response('presentation_record_usage.html',
                               {'record': record,
                                'presentations': presentations,
-                              },
+                               },
                               context_instance=RequestContext(request))

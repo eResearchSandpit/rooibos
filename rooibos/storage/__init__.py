@@ -1,28 +1,24 @@
-from __future__ import with_statement, absolute_import
-# from PIL import Image
-# import StringIO
-# from six.moves import cStringIO
-# import six
-try:
-    from io import StringIO
-except ImportError:
-    import StringIO
+from __future__ import with_statement
+import StringIO
 import logging
 import mimetypes
-import os
-import re
 
 from PIL import Image
-
+import os
+import re
 from django.conf import settings
+
 from django.db.models import Q
+
 from django.contrib.auth.models import User
 
-from rooibos.access.functions import filter_by_access, get_effective_permissions_and_restrictions
+from rooibos.access import filter_by_access, get_effective_permissions_and_restrictions
 from rooibos.data.models import Record, standardfield_ids
-from .models import Media, Storage
+from models import Media, Storage
 
 mimetypes.init([os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'mime.types'))])
+
+log = logging.getLogger(__name__)
 
 
 # sort images by area
@@ -77,6 +73,36 @@ def get_media_for_record(record, user=None, passwords={}):
     )
 
 
+def derivative_image(master, width, height, crop_sq=False):
+    if not master.file_exists():
+        log.error('Image derivative failed for media %d, cannot find file "%s"' % (
+            master.id, master.get_absolute_file_path()))
+        return None, (None, None)
+    from PIL import ImageFile
+    ImageFile.MAXBLOCK = 16 * 1024 * 1024
+    # Import here to avoid circular reference
+    from multimedia import get_image, overlay_image_with_mimetype_icon
+    try:
+        file = get_image(master)
+        image = Image.open(file)
+        if crop_sq:
+            w, h = image.size
+            if w > h:
+                image = image.crop(((w - h) / 2, 0, (w - h) / 2 + h, h))
+            elif w < h:
+                image = image.crop((0, (h - w) / 2, w, (h - w) / 2 + w))
+        image.thumbnail((width, height), Image.ANTIALIAS)
+        image = overlay_image_with_mimetype_icon(image, master.mimetype)
+        output = StringIO.StringIO()
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        image.save(output, 'JPEG', quality=85, optimize=True)
+        return output.getvalue(), image.size
+    except Exception, e:
+        log.error('Image derivative failed for media %d (%s)' % (master.id, e))
+        return None, (None, None)
+
+
 try:
     import gfx
 
@@ -123,21 +149,21 @@ def get_image_for_record(record, user=None, width=100000, height=100000, passwor
             width = min(width, int(restrictions.get('width', width)))
             height = min(height, int(restrictions.get('height', height)))
         except ValueError:
-            logging.exception('Invalid height/width restrictions: %s' % repr(restrictions))
+            log.exception('Invalid height/width restrictions: %s' % repr(restrictions))
 
     # see if image needs resizing
     if m.width > width or m.height > height or m.mimetype != 'image/jpeg' or not m.is_local():
 
         def derivative_image(master, width, height):
             if not master.file_exists():
-                logging.error('Image derivative failed for media %d, cannot find file "%s"' % (
-                master.id, master.get_absolute_file_path()))
+                log.error('Image derivative failed for media %d, cannot find file "%s"' % (
+                    master.id, master.get_absolute_file_path()))
                 return None, (None, None)
             from PIL import ImageFile
             ImageFile.MAXBLOCK = 16 * 1024 * 1024
             # Import here to avoid circular reference
             # TODO: need to move all these functions out of __init__.py
-            from .multimedia import get_image, overlay_image_with_mimetype_icon
+            from multimedia import get_image, overlay_image_with_mimetype_icon
             try:
                 file = get_image(master)
                 image = Image.open(file)
@@ -155,7 +181,7 @@ def get_image_for_record(record, user=None, width=100000, height=100000, passwor
                 image.save(output, 'JPEG', quality=85, optimize=True)
                 return output.getvalue(), image.size
             except Exception, e:
-                logging.error('Image derivative failed for media %d (%s)' % (master.id, e))
+                log.error('Image derivative failed for media %d (%s)' % (master.id, e))
                 return None, (None, None)
 
         # See if a derivative already exists

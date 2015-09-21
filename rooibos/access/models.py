@@ -1,9 +1,12 @@
 import sys
+
 from django.db import models
 from django.db.models import Q
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.contenttypes import generic
+#from django.contrib.contenttypes import generic
+from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.auth.models import User, Group
+
 from rooibos.contrib.ipaddr import IP
 
 PY2 = sys.version_info[0] == 2
@@ -12,7 +15,7 @@ PY2 = sys.version_info[0] == 2
 class AccessControl(models.Model):
     content_type = models.ForeignKey(ContentType)
     object_id = models.PositiveIntegerField(db_index=True)
-    content_object = generic.GenericForeignKey('content_type', 'object_id')
+    content_object = GenericForeignKey('content_type', 'object_id')
     user = models.ForeignKey(User, null=True, blank=True)
     usergroup = models.ForeignKey(Group, null=True, blank=True)
     read = models.NullBooleanField()

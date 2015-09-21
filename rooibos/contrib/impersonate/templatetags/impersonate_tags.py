@@ -1,7 +1,10 @@
+from __future__ import absolute_import
+
 from django import template
 from django.template.loader import render_to_string
-from impersonate.functions import get_real_user, get_available_users, can_impersonate_others
 from django.template import RequestContext
+
+from rooibos.contrib.impersonate.functions import get_real_user, get_available_users, can_impersonate_others
 
 register = template.Library()
 
@@ -19,7 +22,7 @@ class ImpersonationFormNode(template.Node):
             return render_to_string('impersonation_form.html',
                                     {'users': users,
                                      'current': current,
-                                     'request': request,},
+                                     'request': request, },
                                     context_instance=RequestContext(request))
         else:
             return ''
@@ -28,7 +31,6 @@ class ImpersonationFormNode(template.Node):
 @register.tag
 def impersonation_form(parser, token):
     return ImpersonationFormNode()
-
 
 
 @register.filter(name='can_realuser_impersonate_others')

@@ -1,15 +1,18 @@
+[![Code Issues](http://www.quantifiedcode.com/api/v1/project/0094577cbd774ac9a1f3d0f220bf6a49/badge.svg)](http://www.quantifiedcode.com/app/project/0094577cbd774ac9a1f3d0f220bf6a49) Code Issues detected by Quantified Code - check them if you're looking for something to fix
+
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/hanleybrand/rooibos?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) Chat/ask questions/etc - don't be shy!
+
+
 # Madison Digial Image Database (MDID)
 
 The [Madison Digital Image Database](http://mdid.org/) is a free, open source media repo aimed at education spaces.
 It was created at [James Madison University](http://www.jmu.edu).
 
-[![Code Issues](http://www.quantifiedcode.com/api/v1/project/0094577cbd774ac9a1f3d0f220bf6a49/badge.svg)](http://www.quantifiedcode.com/app/project/0094577cbd774ac9a1f3d0f220bf6a49)
-
 ## Django 1.8.x upgrade - clone to a new directory
 
 **Status:** Currently in a "for developers only/get it running" state - will work on an existing mdid3 installation's database, although obvs don't run it against a production database.
 
-**This branch has the potential to mess up the organization of a django 1.2.7 based branch, so `git clone` to seperate directory for testing**
+**This branch has the potential to mess up the organization of a django 1.2.7 based branch, so `git clone` to separate directory for testing**
 
 I'm currently running it on OS X but I tried to make any settings changes as generic as possible (I made most if not all directories set relative to PROJECT_ROOT)
 

@@ -7,7 +7,8 @@ import types
 import sys
 
 from django.contrib.auth.models import User
-from django.contrib.contenttypes import generic
+# from django.contrib.contenttypes import generic
+from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 # from django.core.cache import cache
 from django.core.urlresolvers import reverse
@@ -415,6 +416,7 @@ class FieldSet(models.Model):
 
     class Meta:
         ordering = ['title']
+        db_table = 'data_fieldset'
 
     @staticmethod
     def for_user(user):
@@ -454,7 +456,7 @@ class FieldValue(models.Model):
     language = models.CharField(max_length=5, null=True, blank=True)
     context_type = models.ForeignKey(ContentType, null=True, blank=True)
     context_id = models.PositiveIntegerField(null=True, blank=True)
-    context = generic.GenericForeignKey('context_type', 'context_id')
+    context = GenericForeignKey('context_type', 'context_id')
 
     def save(self, **kwargs):
         self.index_value = self.value[:32] if self.value != None else None

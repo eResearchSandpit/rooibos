@@ -4,18 +4,43 @@ from __future__ import unicode_literals
 from django.db import models, migrations
 from django.conf import settings
 
-#from django.contrib.contenttypes.management import update_contenttypes
+from rooibos.util.database_operations import db_table_exists
 
-#update_contenttypes()
+MIGRATION_DEPS = [
+    ('contenttypes', '0002_remove_content_type_name'),
+    ('auth', '0006_require_contenttypes_0002'),
+    ('flatpages', '__first__'),
+    ('admin', '__first__'),
+    ('sessions', '__first__'),
+    ('sites', '__first__'),
+    ('redirects', '__first__'),
+    ('django_comments', '__first__'),
+    ('impersonate', '__first__'),
+    ('util', '__first__'),
+    ('migration', '__first__'),
+    ('tagging', '__first__'),
+    migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+]
 
-
-class Migration(migrations.Migration):
-
-    dependencies = [
+if db_table_exists('django_content_type'):
+    FIRST_DEPS = [
         ('contenttypes', '0002_remove_content_type_name'),
         ('auth', '0006_require_contenttypes_0002'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
+else:
+    FIRST_DEPS = [
+        ('contenttypes', '__first__'),
+    ]
+
+# DEPENDENCIES = FIRST_DEPS + MIGRATION_DEPS
+DEPENDENCIES = MIGRATION_DEPS
+
+print 'Rooibos Migration using Migration Dependencies: %s' % str(DEPENDENCIES)
+
+
+class Migration(migrations.Migration):
+    dependencies = DEPENDENCIES
 
     operations = [
         migrations.CreateModel(
@@ -59,7 +84,8 @@ class Migration(migrations.Migration):
                 ('event', models.CharField(max_length=64, db_index=True)),
                 ('data_field', models.TextField(db_column=b'data', blank=True)),
                 ('content_type', models.ForeignKey(to='contenttypes.ContentType', null=True)),
-                ('user_field', models.ForeignKey(db_column=b'user_id', blank=True, to=settings.AUTH_USER_MODEL, null=True)),
+                ('user_field',
+                 models.ForeignKey(db_column=b'user_id', blank=True, to=settings.AUTH_USER_MODEL, null=True)),
             ],
             options={
                 'db_table': 'statistics_activity',
@@ -96,7 +122,8 @@ class Migration(migrations.Migration):
                 ('description', models.TextField(blank=True)),
                 ('agreement', models.TextField(null=True, blank=True)),
                 ('password', models.CharField(max_length=32, blank=True)),
-                ('children', models.ManyToManyField(to='rooibos.Collection', db_table=b'data_collection_children', blank=True)),
+                ('children',
+                 models.ManyToManyField(to='rooibos.Collection', db_table=b'data_collection_children', blank=True)),
                 ('owner', models.ForeignKey(blank=True, to=settings.AUTH_USER_MODEL, null=True)),
             ],
             options={
@@ -118,8 +145,11 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ExtendedGroup',
             fields=[
-                ('group_ptr', models.OneToOneField(parent_link=True, auto_created=True, primary_key=True, serialize=False, to='auth.Group')),
-                ('type', models.CharField(max_length=1, choices=[(b'A', b'Authenticated'), (b'I', b'IP Address based'), (b'P', b'Attribute based'), (b'E', b'Everybody')])),
+                ('group_ptr',
+                 models.OneToOneField(parent_link=True, auto_created=True, primary_key=True, serialize=False,
+                                      to='auth.Group')),
+                ('type', models.CharField(max_length=1, choices=[(b'A', b'Authenticated'), (b'I', b'IP Address based'),
+                                                                 (b'P', b'Attribute based'), (b'E', b'Everybody')])),
             ],
             options={
                 'db_table': 'access_extendedgroup',
@@ -133,7 +163,8 @@ class Migration(migrations.Migration):
                 ('label', models.CharField(max_length=100)),
                 ('name', models.SlugField()),
                 ('old_name', models.CharField(max_length=100, null=True, blank=True)),
-                ('equivalent', models.ManyToManyField(related_name='equivalent_rel_+', null=True, to='rooibos.Field', db_table=b'data_field_equivalent', blank=True)),
+                ('equivalent', models.ManyToManyField(related_name='equivalent_rel_+', null=True, to='rooibos.Field',
+                                                      db_table=b'data_field_equivalent', blank=True)),
             ],
             options={
                 'ordering': ['name'],
@@ -150,6 +181,7 @@ class Migration(migrations.Migration):
             ],
             options={
                 'ordering': ['title'],
+                'db_table': 'data_fieldset',
             },
         ),
         migrations.CreateModel(
@@ -237,6 +269,39 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.CreateModel(
+            name='Presentation',
+            fields=[
+                ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
+                ('title', models.CharField(max_length=100)),
+                ('name', models.SlugField(unique=True)),
+                ('hidden', models.BooleanField(default=False)),
+                ('source', models.CharField(max_length=1024, null=True)),
+                ('description', models.TextField(null=True, blank=True)),
+                ('password', models.CharField(max_length=32, null=True, blank=True)),
+                ('hide_default_data', models.BooleanField(default=False)),
+                ('created', models.DateTimeField(auto_now_add=True)),
+                ('modified', models.DateTimeField(auto_now=True)),
+                ('fieldset', models.ForeignKey(to='rooibos.FieldSet', null=True)),
+                ('owner', models.ForeignKey(to=settings.AUTH_USER_MODEL)),
+            ],
+            options={
+                'db_table': 'presentation_presentation',
+                'permissions': (('publish_presentations', 'Can publish presentations'),),
+            },
+        ),
+        migrations.CreateModel(
+            name='PresentationItemInfo',
+            fields=[
+                ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
+                ('info', models.TextField(blank=True)),
+                ('item', models.ForeignKey(related_name='media', to='presentation.PresentationItem')),
+                ('media', models.ForeignKey(to='rooibos.Media')),
+            ],
+            options={
+                'db_table': 'presentation_presentationiteminfo',
+            },
+        ),
+        migrations.CreateModel(
             name='ProxyUrl',
             fields=[
                 ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
@@ -268,15 +333,36 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.CreateModel(
+            name='PresentationItem',
+            fields=[
+                ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
+                ('hidden', models.BooleanField(default=False)),
+                ('type', models.CharField(max_length=16, blank=True)),
+                ('order', models.SmallIntegerField()),
+                ('presentation', models.ForeignKey(related_name='items', to='presentation.Presentation')),
+                ('record', models.ForeignKey(to='rooibos.Record')),
+            ],
+            options={
+                'ordering': ['order'],
+                'db_table': 'presentation_presentationitem',
+            },
+        ),
+        migrations.CreateModel(
             name='Storage',
             fields=[
                 ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
                 ('title', models.CharField(max_length=100)),
                 ('name', models.SlugField()),
                 ('system', models.CharField(max_length=50)),
-                ('base', models.CharField(help_text=b'Absolute path to server directory containing files.', max_length=1024, null=True)),
-                ('urlbase', models.CharField(help_text=b'URL at which stored file is available, e.g. through streaming. May contain %(filename)s placeholder, which will be replaced with the media url property.', max_length=1024, null=True, verbose_name=b'URL base', blank=True)),
-                ('deliverybase', models.CharField(db_column=b'serverbase', max_length=1024, blank=True, help_text=b'Absolute path to server directory in which a temporary symlink to the actual file should be created when the file is requested e.g. for streaming.', null=True, verbose_name=b'server base')),
+                ('base',
+                 models.CharField(help_text=b'Absolute path to server directory containing files.', max_length=1024,
+                                  null=True)),
+                ('urlbase', models.CharField(
+                    help_text=b'URL at which stored file is available, e.g. through streaming. May contain %(filename)s placeholder, which will be replaced with the media url property.',
+                    max_length=1024, null=True, verbose_name=b'URL base', blank=True)),
+                ('deliverybase', models.CharField(db_column=b'serverbase', max_length=1024, blank=True,
+                                                  help_text=b'Absolute path to server directory in which a temporary symlink to the actual file should be created when the file is requested e.g. for streaming.',
+                                                  null=True, verbose_name=b'server base')),
                 ('derivative', models.IntegerField(null=True, db_column=b'derivative_id')),
             ],
             options={
@@ -293,33 +379,6 @@ class Migration(migrations.Migration):
             ],
             options={
                 'db_table': 'access_subnet',
-            },
-        ),
-        migrations.CreateModel(
-            name='Tag',
-            fields=[
-                ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
-                ('name', models.CharField(unique=True, max_length=50, verbose_name='name', db_index=True)),
-            ],
-            options={
-                'ordering': ('name',),
-                'db_table': 'tagging_tag',
-                'verbose_name': 'tag',
-                'verbose_name_plural': 'tags',
-            },
-        ),
-        migrations.CreateModel(
-            name='TaggedItem',
-            fields=[
-                ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
-                ('object_id', models.PositiveIntegerField(verbose_name='object id', db_index=True)),
-                ('content_type', models.ForeignKey(verbose_name='content type', to='contenttypes.ContentType')),
-                ('tag', models.ForeignKey(related_name='items', verbose_name='tag', to='rooibos.Tag')),
-            ],
-            options={
-                'db_table': 'tagging_taggeditem',
-                'verbose_name': 'tagged item',
-                'verbose_name_plural': 'tagged items',
             },
         ),
         migrations.CreateModel(
@@ -361,7 +420,9 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='DisplayFieldValue',
             fields=[
-                ('fieldvalue_ptr', models.OneToOneField(parent_link=True, auto_created=True, primary_key=True, serialize=False, to='rooibos.FieldValue')),
+                ('fieldvalue_ptr',
+                 models.OneToOneField(parent_link=True, auto_created=True, primary_key=True, serialize=False,
+                                      to='rooibos.FieldValue')),
             ],
             options={
                 'db_table': 'data_displayfieldvalue',
@@ -447,10 +508,6 @@ class Migration(migrations.Migration):
             model_name='accesscontrol',
             name='usergroup',
             field=models.ForeignKey(blank=True, to='auth.Group', null=True),
-        ),
-        migrations.AlterUniqueTogether(
-            name='taggeditem',
-            unique_together=set([('tag', 'content_type', 'object_id')]),
         ),
         migrations.AlterUniqueTogether(
             name='media',

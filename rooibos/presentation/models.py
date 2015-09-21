@@ -1,9 +1,11 @@
 from django.db import models, connection
 from django.contrib.auth.models import User, Group, Permission
-from django.contrib.contenttypes import generic
+# from django.contrib.contenttypes import generic
+from django.contrib.contenttypes.fields import GenericRelation
 from django.core.urlresolvers import reverse
 from django.db.models import Q
 from django.contrib.contenttypes.models import ContentType
+
 from rooibos.data.models import Record, FieldSet, FieldValue, standardfield, standardfield_ids
 from rooibos.storage.models import Media
 from rooibos.util import unique_slug
@@ -23,7 +25,7 @@ class Presentation(models.Model):
     hide_default_data = models.BooleanField(default=False)
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
-    ownedwrapper = generic.GenericRelation('util.OwnedWrapper')
+    ownedwrapper = GenericRelation('util.OwnedWrapper')
 
     def save(self, **kwargs):
         unique_slug(self, slug_source='title', slug_field='name', check_current_slug=kwargs.get('force_insert'))
@@ -99,6 +101,7 @@ class Presentation(models.Model):
             ("publish_presentations", "Can publish presentations"),
         )
         db_table = 'presentation_presentation'
+
 
 class PresentationItem(models.Model):
 

@@ -5,6 +5,7 @@ import os
 # import uuid
 import mimetypes
 import json
+import logging
 
 from django import forms
 from django.conf import settings
@@ -36,6 +37,7 @@ from rooibos.access.functions import filter_by_access  # , get_effective_permiss
 
 from .models import Media, Storage, TrustedSubnet, ProxyUrl
 
+log = logging.getLogger(__name__)
 
 # def expire_header(seconds=3600):
 # return (datetime.utcnow() + timedelta(0, seconds)).strftime('%a, %d %b %Y %H:%M:%S GMT')
@@ -43,7 +45,10 @@ from .models import Media, Storage, TrustedSubnet, ProxyUrl
 
 def add_content_length(func):
     def _add_header(request, *args, **kwargs):
+        #log.debug('request: %s' % request)
         response = func(request, *args, **kwargs)
+
+        #log.debug('response type: %s' % type(response))
         if type(response) == HttpResponse:
             if hasattr(response._container, 'size'):
                 response['Content-Length'] = response._container.size
@@ -53,8 +58,9 @@ def add_content_length(func):
                     # was elif response._is_string:
                     # response._is_string was throwing an error, changed in django 1.5
             elif isinstance(response.content, basestring):
-                #logging.debug('did an error just get thrown? see storage/views.py:49')
+                #log.debug('did an error just get thrown? see storage/views.py:49')
                 response['Content-Length'] = len(response.content)
+
         return response
 
     return _add_header
@@ -74,7 +80,7 @@ def retrieve(request, recordid, record, mediaid, media):
     try:
         content = mediaobj.load_file()
     except IOError:
-        logging.error("mediaobj.load_file() failed for media.id %s" % mediaid)
+        log.error("mediaobj.load_file() failed for media.id %s" % mediaid)
         raise Http404()
 
     Activity.objects.create(event='media-download',
@@ -90,10 +96,14 @@ def retrieve(request, recordid, record, mediaid, media):
 @cache_control(private=True, max_age=3600)
 def retrieve_image(request, recordid, record, width=None, height=None):
     passwords = request.session.get('passwords', dict())
-
+    # log.debug('get_image_for_record(%s, %s, %i, %i, %s)' % (recordid, request.user,
+    #                                                         int(width or 100000),
+    #                                                         int(height or 100000),
+    #                                                         passwords))
     path = get_image_for_record(recordid, request.user, int(width or 100000), int(height or 100000), passwords)
+    #path = get_image_for_record(Record.objects.get(id=recordid), request.user, int(width or 100000), int(height or 100000), passwords)
     if not path:
-        logging.error("get_image_for_record failed for record.id %s" % recordid)
+        log.error("get_image_for_record failed for record.id %s" % recordid)
         raise Http404()
 
     Activity.objects.create(event='media-download-image',
@@ -106,7 +116,7 @@ def retrieve_image(request, recordid, record, width=None, height=None):
             response["Content-Disposition"] = "attachment; filename=%s.jpg" % record
         return response
     except IOError:
-        logging.error("IOError: %s" % path)
+        log.error("IOError: %s" % path)
         raise Http404()
 
 
@@ -212,7 +222,7 @@ def record_thumbnail(request, id, name):
         try:
             return HttpResponse(content=open(filename, 'rb').read(), content_type='image/jpeg')
         except IOError:
-            logging.error("IOError: %s" % filename)
+            log.error("IOError: %s" % filename)
     return HttpResponseRedirect(reverse('static', args=('images/thumbnail_unavailable.png',)))
 
 

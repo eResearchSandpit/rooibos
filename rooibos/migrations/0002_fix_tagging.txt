@@ -1,0 +1,16 @@
+# from django.db import models
+# from django.db import migrations
+#
+#
+# class Migration(migrations.Migration):
+#
+#     dependencies = [
+#         ('rooibos', '0001_initial'),
+#     ]
+#
+#     operations = [
+#         migrations.AlterUniqueTogether(
+#             name='taggeditem',
+#             unique_together=set([('tag', 'content_type', 'object_id')]),
+#         ),
+#     ]

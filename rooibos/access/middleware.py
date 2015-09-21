@@ -15,46 +15,46 @@ import logging
 log = logging.getLogger(__name__)
 
 
-class AccessOnStart:
-    def __init__(self):
-
-        try:
-            # Add missing index on object_id on AccessControl table
-            creation = BaseDatabaseCreation(connection)
-            sql = creation.sql_indexes_for_field(
-                AccessControl,
-                AccessControl._meta.get_field('object_id'),
-                no_style(),
-            )
-            log.debug(sql)
-            cursor = connection.cursor()
-            for s in sql:
-                log.debug('access.middleware.AccessOnStart: Add missing index on object_id on AccessControl table'
-                          '\nrunning query %s' % s)
-                cursor.execute(s)
-                log.debug('access.middleware.AccessOnSta'
-                          'rt: done adding missing index %s' % s)
-        except Exception as e:
-            log.exception("""access.middleware: error running query
-                              is it access_accesscontrol_846f0221?
-                              \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~""")
-            log.exception(AccessControl._meta.get_field('object_id'))
-            log.exception(e)
-            # pass
-
-        try:
-            # Remove IP based group members
-            for group in ExtendedGroup.objects.filter(type=IP_BASED_GROUP):
-                log.debug('deleting users from group %s' % group.id)
-                group.user_set.clear()
-                log.debug('done')
-        except:
-            log.exception('error deleting users')
-            # pass
-
-        # Only need to run once
-        log.debug('removing access.middleware.AccessOnStart via raise MiddlewareNotUsed')
-        raise MiddlewareNotUsed
+# class AccessOnStart:
+#     def __init__(self):
+#
+#         try:
+#             # Add missing index on object_id on AccessControl table
+#             creation = BaseDatabaseCreation(connection)
+#             sql = creation.sql_indexes_for_field(
+#                 AccessControl,
+#                 AccessControl._meta.get_field('object_id'),
+#                 no_style(),
+#             )
+#             log.debug(sql)
+#             cursor = connection.cursor()
+#             for s in sql:
+#                 log.debug('.AccessOnStart: Add missing index on object_id on AccessControl table'
+#                           '\nrunning query %s' % s)
+#                 cursor.execute(s)
+#                 log.debug('.AccessOnStart:'
+#                           'rt: done adding missing index %s' % s)
+#         except Exception as e:
+#             log.exception("""access.middleware: error running query
+#                               is it access_accesscontrol_846f0221?
+#                               \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~""")
+#             log.exception(AccessControl._meta.get_field('object_id'))
+#             log.exception(e)
+#             # pass
+#
+#         try:
+#             # Remove IP based group members
+#             for group in ExtendedGroup.objects.filter(type=IP_BASED_GROUP):
+#                 log.debug('deleting users from group %s' % group.id)
+#                 group.user_set.clear()
+#                 log.debug('done')
+#         except:
+#             log.exception('error deleting users')
+#             # pass
+#
+#         # Only need to run once
+#         log.debug('removing access.middleware.AccessOnStart via raise MiddlewareNotUsed')
+#         raise MiddlewareNotUsed
 
 
 class AnonymousIpGroupMembershipMiddleware():

@@ -1,15 +1,17 @@
+from __future__ import absolute_import
+
+import logging
+
 from django.contrib.auth import login
 from django.contrib.auth.models import User
-from models import Impersonation
 from django.db.models import Q
+
 from django.core.exceptions import PermissionDenied
-import django.dispatch
-import logging
-from rooibos.contrib.impersonate import signals
+
+from .models import Impersonation
+from . import signals
 
 IMPERSONATION_REAL_USER_SESSION_KEY = 'IMPERSONATION_REAL_USER'
-
-
 
 
 def impersonate(request, username):
@@ -23,8 +25,9 @@ def impersonate(request, username):
     signals.user_impersonated.send(sender=None, user=user)
     logging.debug("Sent user impersonated signal (%s)" % signals.user_impersonated)
 
+
 def endimpersonation(request):
-    if request.session.has_key(IMPERSONATION_REAL_USER_SESSION_KEY):
+    if IMPERSONATION_REAL_USER_SESSION_KEY in request.session:
         realusername = request.session.get(IMPERSONATION_REAL_USER_SESSION_KEY)
         del request.session[IMPERSONATION_REAL_USER_SESSION_KEY]
         user = User.objects.get(username=realusername)
@@ -51,8 +54,9 @@ def get_available_users(realusername):
         return User.objects.exclude(username=realusername).order_by('username')
     else:
         return User.objects.filter(
-            Q(impersonated_set__group__user__username=realusername) | Q(groups__impersonated_set__group__user__username=realusername)
-            ).distinct().order_by('username')
+            Q(impersonated_set__group__user__username=realusername) | Q(
+                groups__impersonated_set__group__user__username=realusername)
+        ).distinct().order_by('username')
 
 
 def can_impersonate_others(realusername):

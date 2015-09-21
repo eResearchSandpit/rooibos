@@ -169,17 +169,3 @@ def ldap_init(ldap_settings=settings.LDAP_AUTH):
 
         return ldap_object
 
-shell_plus_test_lines = '''
-import getpass
-import logging
-ldap_auth = settings.LDAP_AUTH[0]
-
-import ldap
-from rooibos.auth.ldapauth import get_dn, user_bind, ldap_init
-lo = ldap_init()
-lo.uri
-lo.bind_user
-lo.simple_bind_s(lo.bind_user, lo.bind_password)
-test_user = '%s=%s' % (ldap_auth['cn'], 'phanley')
-
-'''

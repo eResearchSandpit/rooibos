@@ -4,7 +4,7 @@ function mdid-check() {
 echo "Currently running processes ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 # pgrep -f solr | { read message; echo "SOLR pid:            $message"; }
 echo -e  "\n########################## solr"
-pgrep -fl solr
+pgrep -fl  "java -jar start.jar"
 echo -e  "\n########################## rabbitmq-server"
 pgrep -fl rabbitmq
 echo -e  "\n########################## mysql"
@@ -14,4 +14,28 @@ pgrep -fl "runworkers"
 echo -e  "\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 }
 
+function gateway-ip(){
+    route -n | grep 'UG' | awk '{print $2}'
+}
+
 alias solr-check="curl http://localhost:8983/solr/admin/ping"
+
+function mdid-help(){
+    echo "MDID 3 command line help______________________________________________________________"
+    echo "mdid-check                                    |  check the processes MDID depends on  "
+    echo "solr-check                                    |  check that solr responds with XML    "
+    echo "gateway_ip                                    |  check the IP address of this machine "
+    echo "workon mdid                                   |  activate the MDID python virtualenv  "
+    echo "    or....                                       "
+    echo "source /home/vagrant/.virtualenvs/mdid/bin/activate   "
+    echo "----------------------------|"
+    echo "MDID 3 evironment variables |"
+    echo "----------------------------|---------------------------------------------------------"
+    echo "  HOME_DIR                  |  $HOME_DIR"
+    echo "  VAGRANT_DIR               |  $VAGRANT_DIR"
+    echo "  PROVISION_DIR             |  $PROVISION_DIR"
+    echo "  MDID_DIR                  |  $MDID_DIR"
+    echo "  MDID_DATA_DIR             |  $MDID_DATA_DIR"
+    echo "  CONFIG_DIR                |  $CONFIG_DIR"
+    echo "  ROOIBOS_DIR               |  $ROOIBOS_DIR"
+}

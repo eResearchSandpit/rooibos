@@ -41,7 +41,7 @@ CLOUDFILES_API_KEY = ''
 TIME_ZONE = 'America/New_York'
 
 # Make this unique, and don't share it with anybody.
-SECRET_KEY = 'e#!poDuIJ}N,".K=H:T/4z5POb;Gl/N6$6a&,(DRAHUF5c",_p'
+SECRET_KEY = 'test_e#!poDuIJ}N,".K=H:T/4z5POb;Gl/N6$6a&,(DRAHUF5c",_p'
 
 # URL prefix for admin media -- CSS, JavaScript and images. Make sure to use a
 # trailing slash.

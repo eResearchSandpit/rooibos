@@ -13,6 +13,7 @@ rooibos/static/flowplayer/flowplayer.commercial*
 bin-debug/
 unused_bin/
 .metadata/
+.ipynb_checkpoints
 Thumbs.db
 rooibos/static/cache/*
 2*M.mysql
@@ -25,3 +26,5 @@ solr/nohup.out
 venv.vagrant/*
 tests/*local*
 *.dump
+
+

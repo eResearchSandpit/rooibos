@@ -1,23 +1,27 @@
-from django.conf import settings
-import os
 import tempfile
 import wave
 import struct
-import re
 import logging
 import json
 from StringIO import StringIO
 from subprocess import Popen, PIPE
-from rooibos.data.models import FieldValue, get_system_field
+
+from django.conf import settings
+import os
+import re
 from PIL import Image
 
+from rooibos.data.models import get_system_field
+
 log = logging.getLogger(__name__)
+
 
 def _seconds_to_timestamp(seconds):
     hours = seconds / 3600
     minutes = seconds / 60
     seconds = seconds % 60
     return '%02d:%02d:%02d' % (hours, minutes, seconds)
+
 
 def _run_ffmpeg(parameters, infile, outfile_ext):
     if not settings.FFMPEG_EXECUTABLE:
@@ -37,9 +41,11 @@ def _run_ffmpeg(parameters, infile, outfile_ext):
     finally:
         os.remove(filename)
 
+
 def _which(program):
     def is_exe(fpath):
         return os.path.exists(fpath) and os.access(fpath, os.X_OK)
+
     fpath, fname = os.path.split(program)
     if fpath:
         if is_exe(program):
@@ -50,6 +56,7 @@ def _which(program):
             if is_exe(exe_file):
                 return exe_file
     return None
+
 
 def _pdfthumbnail(infile):
     handle, filename = tempfile.mkstemp('.pdf')
@@ -94,6 +101,7 @@ def capture_video_frame(videofile, offset=5):
     frame, output, errors = _run_ffmpeg(params, videofile, '.jpg')
     return frame
 
+
 def render_audio_waveform(audiofile, basecolor, background, left, top, height, width, max_only):
     wave_file, output, errors = _run_ffmpeg('-t 00:00:30 -ar 8192 -ac 1', audiofile, '.wav')
     if not wave_file:
@@ -129,6 +137,7 @@ def render_audio_waveform(audiofile, basecolor, background, left, top, height, w
     output.seek(0)
     return output
 
+
 def render_audio_waveform_by_mimetype(audiofile, mimetype):
     path = getattr(settings, 'AUDIO_THUMBNAILS', os.path.join(settings.STATIC_DIR, 'images', 'audiothumbs'))
     mimetype = mimetype.split('/')[1]
@@ -147,7 +156,7 @@ def render_pdf(pdffile):
 
 
 def get_image(media):
-    log.debug('get_image: %s (%s)' % (media.get_absolute_file_path(), media.mimetype))
+    # log.debug('get_image: %s (%s)' % (media.get_absolute_file_path(), media.mimetype))
     image = None
     if media.mimetype.startswith('image/'):
         image = media.load_file()
@@ -165,6 +174,7 @@ def get_image(media):
         image = render_audio_waveform_by_mimetype(media.get_absolute_file_path(), media.mimetype)
     elif media.mimetype == 'application/pdf':
         image = render_pdf(media.get_absolute_file_path())
+    # log.debug('returning %s, type %s' % (image, type(image)))
     return image
 
 
