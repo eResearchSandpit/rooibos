@@ -339,7 +339,7 @@ class usViewer():
         """
         This is where we should add the full image to the database and download it 
         """
-        job = JobInfo.objects.create(func='unitedsearch_download_media', arg=simplejson.dumps({
+        job = JobInfo.objects.create(func='unitedsearch_download_media', arg=json.dumps({
             'record': record.id,
             'url': image.url
         }))
@@ -370,7 +370,7 @@ class usViewer():
                     record = self.record(i)
                     result.append(record.id)
             r = request.POST.copy()
-            r['id'] = simplejson.dumps(result)
+            r['id'] = json.dumps(result)
             request.POST = r
         ans = select_record(request)
         return ans

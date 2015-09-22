@@ -247,7 +247,8 @@ LOGIN_CHECKS = (
 # move to settings_local for system customization
 TEMPLATE_DIRS = (
     os.path.normpath(os.path.join(ROOIBOS_ROOT, 'templates')),
-	os.path.normpath(os.path.join(ROOIBOS_ROOT, 'unitedsearch', 'templates'))
+	os.path.normpath(os.path.join(ROOIBOS_ROOT, 'unitedsearch', 'templates')),
+	os.path.normpath(os.path.join(ROOIBOS_ROOT, 'solr', 'templates'))
 #     os.path.normpath(os.path.join(ROOIBOS_ROOT, 'access', 'templates')),
 #     os.path.normpath(os.path.join(ROOIBOS_ROOT, 'ui', 'templates')),
 #     os.path.normpath(os.path.join(ROOIBOS_ROOT, 'contrib', 'google_analytics', 'templates')),

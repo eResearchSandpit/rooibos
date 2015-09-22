@@ -117,6 +117,7 @@ class Record(models.Model):
     manager = models.CharField(max_length=50, null=True, blank=True)
     next_update = models.DateTimeField(null=True, blank=True)
     owner = models.ForeignKey(User, null=True, blank=True)
+    tmp_extthumb = models.CharField(max_length=1024, null=True, blank=True)
 
     class Meta:
         db_table = 'data_record'

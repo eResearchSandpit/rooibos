@@ -14,19 +14,11 @@ import logging
 import re
 import json
 
-
-#sources = {
-#    'NasaImageExchange': NasaImageExchange,
-#    'ArtstorSearch': ArtstorSearch,
-#    'Flickr': FlickrSearch,
-#}
-
-source_classes = aggregate.federatedSearchSources() #[
+source_classes = [] + aggregate.federatedSearchSources() #[
     #NasaImageExchange, TODO: ignoring completely
     #ArtstorSearch, TODO: this should be implemented through unitedsearch
     #FlickrSearch, TODO: Maybe implement later
-
-
+	
 
 def sidebar_api_raw(request, query, cached_only=False):
     print "sidebar_api_raw-----------"

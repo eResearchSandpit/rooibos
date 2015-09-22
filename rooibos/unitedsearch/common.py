@@ -177,12 +177,5 @@ def list_to_str(l) :
 Creates a ProxyHandler for the University Proxy
 """
 def proxy_opener():
-    if settings_local.PROXY:
-        password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
-        password_mgr.add_password(None, PROXY_URL, settings_local.username, settings_local.password)
-        proxy_handler = urllib2.ProxyHandler({"http":PROXY_URL, "https":settings_local.username+":"+settings_local.password+"@"+PROXY_URL})
-        proxy_auth_handler = urllib2.ProxyBasicAuthHandler(password_mgr)
-        return urllib2.build_opener(proxy_handler, proxy_auth_handler)
-    else:
         return urllib2.build_opener()
   

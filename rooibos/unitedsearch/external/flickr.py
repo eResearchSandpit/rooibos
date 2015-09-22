@@ -181,6 +181,7 @@ def getImage(identifier):
     )
     info = minidom.parseString(image_info)
     title = str(info.getElementsByTagName("title")[0].childNodes[0].nodeValue)
+    print location_url
     return RecordImage(location_url, thumbnail_url, title, dict(), identifier)
 
 """

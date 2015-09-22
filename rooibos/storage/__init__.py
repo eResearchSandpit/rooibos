@@ -114,9 +114,10 @@ except ImportError:
 def get_image_for_record(record, user=None, width=100000, height=100000, passwords={}, crop_to_square=False):
     media = get_media_for_record(record, user, passwords)
     q = Q(mimetype__startswith='image/')
-    if settings.FFMPEG_EXECUTABLE:
-        # also support video and audio
-        q = q | Q(mimetype__startswith='video/') | Q(mimetype__startswith='audio/')
+	# TODO: Work out what happened to the audio support between 1.2 -> 1.8
+    #if settings.FFMPEG_EXECUTABLE:
+    #    # also support video and audio
+    #    q = q | Q(mimetype__startswith='video/') | Q(mimetype__startswith='audio/')
     if PDF_SUPPORT:
         q = q | Q(mimetype='application/pdf')
 

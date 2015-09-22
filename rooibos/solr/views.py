@@ -632,6 +632,9 @@ def search(request, id=None, name=None, selected=False, json=False):
                            'sort': sort,
                            'random': random.random(),
                            'viewmode': viewmode,
+						   # -- TODO: Replace this with a check to the Sources
+						   'federated_sources': True,
+						   # -- END TODO
                            'federated_search': federated_search,
                            'federated_search_query':query_string,
                            'pagination_helper': [None] * hits,

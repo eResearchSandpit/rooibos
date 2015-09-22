@@ -223,6 +223,9 @@ def record_thumbnail(request, id, name):
             return HttpResponse(content=open(filename, 'rb').read(), content_type='image/jpeg')
         except IOError:
             log.error("IOError: %s" % filename)
+	record = Record.filter_one_by_access(request.user, id)
+	if record and record.tmp_exthumb:
+	    return HttpResponseRedirect(record.tmp_extthumb)
     return HttpResponseRedirect(reverse('static', args=('images/thumbnail_unavailable.png',)))
 
 
