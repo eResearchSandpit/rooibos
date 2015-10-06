@@ -6,6 +6,7 @@ import os
 import mimetypes
 import json
 import logging
+import config
 
 from django import forms
 from django.conf import settings
@@ -95,16 +96,20 @@ def retrieve(request, recordid, record, mediaid, media):
 @add_content_length
 @cache_control(private=True, max_age=3600)
 def retrieve_image(request, recordid, record, width=None, height=None):
+    print 'retriving image'
+    if config.settings_local.DEBUG:
+        print 'storage/views.py -- retrieve_image'
+        print 'record = ' + record
+        print 'record_id = ' + recordid
+        print 'width = '+ str(width) +' and height = '+str(height)
     passwords = request.session.get('passwords', dict())
-    # log.debug('get_image_for_record(%s, %s, %i, %i, %s)' % (recordid, request.user,
-    #                                                         int(width or 100000),
-    #                                                         int(height or 100000),
-    #                                                         passwords))
+       
     path = get_image_for_record(recordid, request.user, int(width or 100000), int(height or 100000), passwords)
-    #path = get_image_for_record(Record.objects.get(id=recordid), request.user, int(width or 100000), int(height or 100000), passwords)
     if not path:
-        log.error("get_image_for_record failed for record.id %s" % recordid)
-        raise Http404()
+        #raise Http404()
+        if config.settings_local.DEBUG:
+            print "THUMBNAIL UNAVAILABLE - NO PATH"
+        return HttpResponseRedirect(reverse('static', args=('images/thumbnail_unavailable.png',)))
 
     Activity.objects.create(event='media-download-image',
                             request=request,
@@ -116,8 +121,11 @@ def retrieve_image(request, recordid, record, width=None, height=None):
             response["Content-Disposition"] = "attachment; filename=%s.jpg" % record
         return response
     except IOError:
-        log.error("IOError: %s" % path)
-        raise Http404()
+        logging.error("IOError: %s" % path)
+        #raise Http404()
+        print 'THUMBNAIL UNAVAILABLE - IO ERROR'
+        return HttpResponseRedirect(reverse('static', args=('images/thumbnail_unavailable.png',)))
+
 
 
 def make_storage_select_choice(storage, user):
@@ -208,9 +216,11 @@ def media_delete(request, mediaid, medianame):
 
 # doneTODO: Passing mimetype to HttpResponse is deprecated and removed in Django 1.7 as per
 # https://github.com/django/django/commit/8eadbc5a03d06f5bfedfa3fad35ad0801d2ab6ff
+
 @add_content_length
 @cache_control(private=True, max_age=3600)
 def record_thumbnail(request, id, name):
+    print 'record_thumbnail'
     filename = get_thumbnail_for_record(id, request.user, crop_to_square=request.GET.has_key('square'))
     if filename:
         Activity.objects.create(event='media-thumbnail',
@@ -222,11 +232,14 @@ def record_thumbnail(request, id, name):
         try:
             return HttpResponse(content=open(filename, 'rb').read(), content_type='image/jpeg')
         except IOError:
-            log.error("IOError: %s" % filename)
-	record = Record.filter_one_by_access(request.user, id)
-	if record and record.tmp_exthumb:
-	    return HttpResponseRedirect(record.tmp_extthumb)
+            logging.error("IOError: %s" % filename)
+    record = Record.filter_one_by_access(request.user, id)
+    if record and record.tmp_extthumb:
+        return HttpResponseRedirect(record.tmp_extthumb)
+    print "THUMBNAIL UNAVAILABLE - NO RECORD"
     return HttpResponseRedirect(reverse('static', args=('images/thumbnail_unavailable.png',)))
+
+	
 
 
 @json_view

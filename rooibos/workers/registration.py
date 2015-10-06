@@ -61,9 +61,11 @@ def discover_workers():
         for app in settings.INSTALLED_APPS:
             try:
                 __import__(app + ".workers")
-                logging.debug('Imported workers for %s' % app)
-            except ImportError:
-                logging.debug('No workers found for %s' % app)
+                print('Imported workers for %s' % app)
+            except ImportError, ex:
+                missed = True
+                #print('No workers found for %s' % app)
+                #print ex
         workers['_discovered'] = True
 
 
@@ -80,7 +82,7 @@ def execute_handler(handler, arg):
 
 
 def worker_callback(ch, method, properties, body):
-    log.debug('worker_callback running')
+    print('worker_callback running')
     discover_workers()
     jobname, data = body.split()
     handler = workers.get(jobname)
@@ -88,7 +90,7 @@ def worker_callback(ch, method, properties, body):
         log.error('Received job with unknown method %s. '
                      'Known workers are %s' % (jobname, workers.keys()))
         return
-    log.debug('Running job %s %s' % (jobname, data))
+    print('Running job %s %s' % (jobname, data))
     try:
         # Classic mode with Job record identifier
         identifier = int(data)
@@ -107,7 +109,7 @@ def run_worker(worker, arg, **kwargs):
     # TODO: Is flush transaction necessary here? Is it still needed? (if not, why not?)
     # flush_transaction()
     discover_workers()
-    log.debug("Running worker %s with arg %s" % (worker, arg))
+    print("Running worker %s with arg %s" % (worker, arg))
 
     connection = pika.BlockingConnection(pika.ConnectionParameters(
         **getattr(settings, 'RABBITMQ_OPTIONS', dict(host='localhost'))))
@@ -116,7 +118,7 @@ def run_worker(worker, arg, **kwargs):
     queue_name = 'rooibos-%s-jobs' % (
         getattr(settings, 'INSTANCE_NAME', 'default'))
     channel.queue_declare(queue=queue_name, durable=True)
-    log.debug('Sending message to worker process: %s' % queue_name)
+    print('Sending message to worker process: %s' % queue_name)
     try:
         channel.basic_publish(
             exchange='',
@@ -127,5 +129,5 @@ def run_worker(worker, arg, **kwargs):
             )
         )
     except Exception:
-        log.exception('Could not publish message %s %s' % (worker, arg))
+        print('Could not publish message %s %s' % (worker, arg))
     connection.close()

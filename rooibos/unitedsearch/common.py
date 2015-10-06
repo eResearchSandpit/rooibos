@@ -1,7 +1,7 @@
 
 """ Methods shared by all UnitedSearch searchers """
 
-#from rooibos.storage.models import *
+from rooibos.storage.models import *
 from rooibos.access.models import AccessControl, ExtendedGroup, AUTHENTICATED_GROUP
 from rooibos.data.models import Collection, Record, standardfield, CollectionItem, Field, FieldValue
 import config.settings_local
@@ -10,6 +10,7 @@ import re
 import json
 import urllib2
 import datetime
+import os
 
 PROXY_URL="www-cache2.ecs.vuw.ac.nz:8080"
 
@@ -28,13 +29,13 @@ def get_collection():
 
 
 def get_storage():
-    print  "storage location: " + os.path.join(settings.AUTO_STORAGE_DIR, 'unitedsearch')
+    print  "storage location: " + os.path.join(config.settings_local.AUTO_STORAGE_DIR, 'unitedsearch')
     storage, created = Storage.objects.get_or_create(
         name='unitedsearch',
         defaults={
             'title': 'United Search collection',
                         'system': 'local',
-                        'base': os.path.join(settings.AUTO_STORAGE_DIR, 'unitedsearch')
+                        'base': os.path.join(config.settings_local.AUTO_STORAGE_DIR, 'unitedsearch')
                 })
     if created:
         print "common.py Storage created"

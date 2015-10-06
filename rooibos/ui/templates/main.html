@@ -134,7 +134,7 @@
 
         <h2>Announcements</h2>
         {% if perms.comments.add_comment %}
-            <div style="margin-bottom: 10px;"><a href="{% url 'ui-announcement-new' %}">Create new announcement</a></div>
+            <!--<div style="margin-bottom: 10px;"><a href="{% url 'ui-announcement-new' %}">Create new announcement</a></div>-->
         {% endif %}
 
         {% get_comment_list for flatpages.flatpage 1 as comments %}

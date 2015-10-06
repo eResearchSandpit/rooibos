@@ -121,10 +121,6 @@ SESSION_COOKIE_AGE = 6 * 3600  # in seconds
 
 SSL_PORT = None  # ':443'
 
-# Theme colors for use in CSS
-PRIMARY_COLOR = "rgb(152, 189, 198)"
-SECONDARY_COLOR = "rgb(118, 147, 154)"
-
 EMAIL_HOST = '127.0.0.1'
 SERVER_EMAIL = 'mdid@example.edu'
 

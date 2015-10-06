@@ -6,9 +6,9 @@ all = [
 	digitalnz,
 	flickr,
 	gallica,
-    collectiveaccess,
-    #artstor,
-	#trove
+        collectiveaccess,
+        #artstor,
+	trove
 ]
 """
 - Trove is not working as intended, the urls returned by trove API are not links to images, 

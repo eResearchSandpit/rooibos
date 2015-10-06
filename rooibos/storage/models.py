@@ -59,7 +59,7 @@ class Storage(models.Model):
             try:
                 return classobj(base=self.base)
             except Exception:
-                logging.exception("Could not initialize storage %s" % classname)
+                print("Could not initialize storage %s" % classname)
                 return None
         else:
             return None
@@ -83,6 +83,8 @@ class Storage(models.Model):
         return storage and storage.get_absolute_file_path(self, media) or None
 
     def save_file(self, name, content):
+        print "Content: " + str(content)
+        print "Name:" + str(name)
         storage = self.storage_system
         return storage and storage.save(name, content) or None
 

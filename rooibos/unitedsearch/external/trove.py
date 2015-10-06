@@ -4,6 +4,7 @@ from BeautifulSoup import BeautifulSoup         # html parser
 from rooibos.unitedsearch import *              # other search tools
 from rooibos.unitedsearch.common import *   # methods common to all databases
 from config.settings_local import *
+from config.settings import *
 import urllib2                                  # html fetcher
 import json                                     # serialiser for data structures
 from rooibos.unitedsearch.external.translator.query_language import Query_Language 
@@ -58,11 +59,10 @@ def _count(soup):
 
     
 def search(query, params, off, num_wanted) :
-    try:
+    if True:
         if (not query or query in "keywords=, params={}") and (not params or params=={}):
             return Result(0, off), empty_params
         off = int(off) #just in case
-        print 'trove 65'
         url, arg = build_URL(query, params)
         if url.endswith("&q=&s=OFFSET"):
             return Result(0, off), arg
@@ -74,7 +74,6 @@ def search(query, params, off, num_wanted) :
         while num_wanted>0:
             print 'trove while loop: num_wanted is ' + str(num_wanted)
             images = parse_api_results(search_result_parser)
-            print 'trove 76'
             #now images is all images found on page
             num_got = len(images)
             for i in images:
@@ -88,16 +87,14 @@ def search(query, params, off, num_wanted) :
                 search_result_parser = get_search_result_parser(url, off, 100)#get next page, remember off is modified in loop above
     
         img_list = Result(total, off)
-        print 'Trove 90'
         for image in result:
              
             img_list.addImage(ResultImage(image[0], image[1], image[2], image[3]))
         #res = dict(empty_params)
         #res["all words"] = kw
-        print 'Trove 95'
         return img_list, arg
         #return Result(0, off), empty_params
-    except Exception, ex:
+    else:
         # Trove does not accept query contains empty keywords. In that case it causes HTTP Error 500
         print 'oh no trove excepts ' +str(ex)
         return Result(0, off), arg
@@ -120,7 +117,7 @@ def parse_api_results(soup):
             thumb = get_thumble(thumb)
         else:
             #thumb= "../../../../static/images/thumbnail_unavailable.png"
-            thumb= settings.STATIC_DIR + "/images/thumbnail_unavailable.png"
+            thumb= STATIC_URL + "/images/thumbnail_unavailable.png"
         if imageTag:
             image = str(imageTag.string).replace("&amp;", "&")
         else:
@@ -197,7 +194,6 @@ def get_search_result_parser(base_url, offset, per_page) :
     if api:
         page_url += "&n="+str(per_page)
     #page_url = "http://api.trove.nla.gov.au/result?key="+TROVE_KEY+"&zone=picture&q=cat"
-
     #TODO: replace this with a WORKING html library retrieval
     if TROVE_DEBUG:
         print 'Debug = True' 
@@ -206,6 +202,7 @@ def get_search_result_parser(base_url, offset, per_page) :
         opener = proxy_opener()
         html = opener.open(page_url)
     #html = urllib2.build_opener(urllib2.ProxyHandler({"http": "http://localhost:3128"})).open(page_url)
+    
     search_results_parser = BeautifulSoup(html)
     return search_results_parser
 

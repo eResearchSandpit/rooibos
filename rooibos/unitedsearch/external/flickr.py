@@ -180,7 +180,7 @@ def getImage(identifier):
         format="rest"
     )
     info = minidom.parseString(image_info)
-    title = str(info.getElementsByTagName("title")[0].childNodes[0].nodeValue)
+    title = info.getElementsByTagName("title")[0].childNodes[0].nodeValue.encode('utf-8')
     print location_url
     return RecordImage(location_url, thumbnail_url, title, dict(), identifier)
 

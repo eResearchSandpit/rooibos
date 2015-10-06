@@ -8,7 +8,7 @@ import sys
 from django.http import HttpResponse
 from django.shortcuts import render_to_response
 from django.conf import settings
-from django.template import RequestContext
+from django.template.context import *
 from django.core.urlresolvers import reverse
 from django.core.files.temp import NamedTemporaryFile
 from django.core.servers.basehttp import FileWrapper

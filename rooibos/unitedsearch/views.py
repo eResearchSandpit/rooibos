@@ -5,12 +5,10 @@ from rooibos.workers.models import JobInfo
 from django.template import RequestContext
 from rooibos.ui.views import select_record
 import json
-from rooibos.storage.models import *
 from rooibos.access.models import AccessControl, ExtendedGroup, AUTHENTICATED_GROUP
 from rooibos.data.models import Collection, Record, standardfield, CollectionItem, Field, FieldValue
 from django.conf.urls import *
 from urllib import urlencode
-#import rooibos.unitedsearch as unitedsearch
 from rooibos.unitedsearch import query_parser, common, aggregate, searchers, ResultRecord, ResultImage, RecordImage  
 from rooibos.unitedsearch import (ScalarParameter, OptionalParameter, DefinedListParameter, UserDefinedTypeParameter,
 MapParameter, ListParameter, OptionalDoubleParameter, OptionalTripleParameter, DoubleParameter)
@@ -299,6 +297,7 @@ class usViewer():
 
     def record(self, identifier):
         image = self.searcher.getImage(identifier)
+        print(image.thumb)
         if isinstance(image, ResultRecord):
             return image.record
         #checking if image is accessible -- if not, then replace
@@ -306,12 +305,17 @@ class usViewer():
         try:
             request = urllib2.Request(image.url)
             request.get_method = lambda : 'HEAD'
-            proxy_opener = common.proxy_opener()
-            response = proxy_opener.open(request)
+            #proxy_opener = common.proxy_opener()
+            #response = proxy_opener.open(request)
         except urllib2.URLError, ex:
+            print(ex)
             image.thumb = "/static/images/thumbnail_unavailable.png"
             # need to change the image thumbnail url to 'thumbnail unav.' here
-        record = Record.objects.create(name=image.name,
+			
+        print("About to build Record")
+        print(image.thumb)
+        record = Record.objects.create(
+						name=image.name,
                         source=image.url,
                         tmp_extthumb=image.thumb,
                         manager='unitedsearch')
@@ -339,11 +343,17 @@ class usViewer():
         """
         This is where we should add the full image to the database and download it 
         """
+		
         job = JobInfo.objects.create(func='unitedsearch_download_media', arg=json.dumps({
             'record': record.id,
             'url': image.url
         }))
+        print "Running Job, Mr Noodle"
         job.run()
+        
+        
+        
+        
         return record
 
     def select(self, request):

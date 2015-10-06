@@ -9,10 +9,10 @@ logger = logging.getLogger("rooibos_solr_workers")
 
 @register_worker("solr_index")
 def solr_index(data):
-    logger.info("Starting solr index")
-    count = SolrIndex().index()
-    logger.info("solr index done, indexed %d records" % count)
-
+    #logger.info("Starting solr index")
+    #count = SolrIndex().index()
+    #logger.info("solr index done, indexed %d records" % count)
+	blah = True
 
 def schedule_solr_index():
     run_worker("solr_index", None)

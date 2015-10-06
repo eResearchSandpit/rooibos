@@ -49,6 +49,7 @@ def count(keyword) :
 
 def get_search_result_parser(base_url, page_idx) :
     page_url = re.sub("PAGEIDX", str(page_idx),base_url)
+    print 'gallica url ' + page_url
     opener = proxy_opener()
     html = opener.open(page_url)#urllib2.build_opener(urllib2.ProxyHandler({"http": "http://localhost:3128"})).open(page_url)
     search_results_parser = BeautifulSoup(html)

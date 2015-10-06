@@ -19,11 +19,17 @@ class JobInfo(models.Model):
         db_table = 'workers_jobinfo'
 
     def run(self):
+        print "Running Job NOW " + str(self.func)
         try:
+            print "ENTERED TRY " + str(self.func)
             self.status = 'Starting'
             self.save()
-            return run_worker(self.func, self.id, background=True)
+            ret = run_worker(self.func, self.id, background=False)
+            print ret
+            return ret
         except Exception, ex:
+            print ex
+            print "ENTERED EXCEPTION " + str(self.func)
             self.status = 'Start failed. %s' % ex
             self.save()
 

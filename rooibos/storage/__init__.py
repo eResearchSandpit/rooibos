@@ -42,9 +42,10 @@ def get_media_for_record(record, user=None, passwords={}):
 
     record_id = getattr(record, 'id', record)
     record = Record.filter_one_by_access(user, record_id)
-
+	
     if not record:
-        # Try to get to record through an accessible presentation -
+        print "Media is not a record"
+     	# Try to get to record through an accessible presentation -
         # own presentations don't count, since it's already established that owner
         # doesn't have access to the record.
         pw_q = Q(
@@ -65,7 +66,10 @@ def get_media_for_record(record, user=None, passwords={}):
         # to the record
         owners = User.objects.filter(id__in=accessible_presentations.values('owner'))
         if not any(Record.filter_one_by_access(owner, record_id) for owner in owners):
-            return Media.objects.none()
+            return Media.objects.none()	
+        
+    print record_id
+    print filter_by_access(user, Storage)
 
     return Media.objects.filter(
         record__id=record_id,
@@ -112,17 +116,19 @@ except ImportError:
 
 
 def get_image_for_record(record, user=None, width=100000, height=100000, passwords={}, crop_to_square=False):
+    print 'getting image from record'
     media = get_media_for_record(record, user, passwords)
+    #print "Media: " + media
     q = Q(mimetype__startswith='image/')
+    print q
 	# TODO: Work out what happened to the audio support between 1.2 -> 1.8
     #if settings.FFMPEG_EXECUTABLE:
     #    # also support video and audio
     #    q = q | Q(mimetype__startswith='video/') | Q(mimetype__startswith='audio/')
-    if PDF_SUPPORT:
-        q = q | Q(mimetype='application/pdf')
+    #if PDF_SUPPORT:
+    #    q = q | Q(mimetype='application/pdf')
 
     media = media.select_related('storage').filter(q)
-
     if not media:
         return None
     map(lambda m: m.identify(lazy=True), media)
@@ -157,7 +163,7 @@ def get_image_for_record(record, user=None, width=100000, height=100000, passwor
 
         def derivative_image(master, width, height):
             if not master.file_exists():
-                log.error('Image derivative failed for media %d, cannot find file "%s"' % (
+                print('Image derivative failed for media %d, cannot find file "%s"' % (
                     master.id, master.get_absolute_file_path()))
                 return None, (None, None)
             from PIL import ImageFile
@@ -182,8 +188,8 @@ def get_image_for_record(record, user=None, width=100000, height=100000, passwor
                 image.save(output, 'JPEG', quality=85, optimize=True)
                 return output.getvalue(), image.size
             except Exception, e:
-                log.error('Image derivative failed for media %d (%s)' % (master.id, e))
-                return None, (None, None)
+                #print('Image derivative failed for media %d (%s)' % (master.id, e))
+				return None, (None, None)
 
         # See if a derivative already exists
         name = '%s-%sx%s%s.jpg' % (m.id, width, height, 'sq' if crop_to_square else '')
@@ -197,14 +203,16 @@ def get_image_for_record(record, user=None, width=100000, height=100000, passwor
                     with file(path, 'wb') as f:
                         f.write(output)
                 else:
+                    print("Returning None")
                     return None
             return path
 
         else:
+            print("Returning None")
             return None
 
     else:
-
+        print("## -- " + m.get_absolute_file_path())
         return m.get_absolute_file_path()
 
 

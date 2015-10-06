@@ -231,10 +231,6 @@ SESSION_COOKIE_AGE = 6 * 3600  # in seconds
 # Requires valid ssl cert, otherwise set to None
 SSL_PORT = None  # ':443'
 
-# Theme colors for use in CSS - see rooibos/ui/templates/master/css
-PRIMARY_COLOR = "rgb(152, 189, 198)"
-SECONDARY_COLOR = "rgb(118, 147, 154)"
-
 EXPOSE_TO_CONTEXT = ('STATIC_DIR', 'PRIMARY_COLOR', 'SECONDARY_COLOR',
                      'EMBED_MASTER_CSS', 'CUSTOM_TRACKER_HTML', 'ADMINS')
 
