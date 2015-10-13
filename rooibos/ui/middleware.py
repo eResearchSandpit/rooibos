@@ -25,10 +25,10 @@ class PageTitles:
             # will cause runtime errors as strip_tags forces Unicode.
             c = unicode(response.content, 'utf8')
             title = _find_tag(c, 'title')
-            if title and response.content[title[0]:title[1]] == "MDID":
+            if title and response.content[title[0]:title[1]] == "VIC VIEW":
                 heading = _find_tag(c, 'h1')
                 if heading:
-                    response.content = "%sMDID - %s%s" % (c[:title[0]],
+                    response.content = "%sVIC VIEW - %s%s" % (c[:title[0]],
                                                           strip_tags(c[heading[0]:heading[1]]),
                                                           c[title[1]:])
         return response

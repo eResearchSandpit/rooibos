@@ -15,7 +15,6 @@ import traceback
 
 @register_worker('unitedsearch_download_media')
 def unitedsearch_download_media(job):
-	print "WORKER HAS STARTED, LOOK AT ME I WANT ATTENTION"
 	print('unitedsearch download media started for %s' % job)
 	jobinfo = None
 	while jobinfo == None:
@@ -59,7 +58,6 @@ def unitedsearch_download_media(job):
 						storage=storage,
 						name=record.name,
 						mimetype=mimetype)
-		print "storage set!!!!!!11!!!1!!!!!!!11!!!1!!!!!1!!"
 		ext = guess_extension(mimetype)
 		extension = guess_extension(mimetype)
 		if not extension :		# wasn't a matched pattern

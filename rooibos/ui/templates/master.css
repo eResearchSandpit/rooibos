@@ -57,7 +57,7 @@
 }
 
 #logo {
-    background: url({% if LOGO_URL %}{{ LOGO_URL }}{% else %}{% static 'images/mdid_logo.png' %}{% endif %}) no-repeat bottom left;
+    background: url({% if LOGO_URL %}{{ LOGO_URL }}{% else %}{% static 'images/vicview.png' %}{% endif %}) no-repeat bottom left;
     width: 150px;
     height: 50px;
     display: block;

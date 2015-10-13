@@ -348,7 +348,6 @@ class usViewer():
             'record': record.id,
             'url': image.url
         }))
-        print "Running Job, Mr Noodle"
         job.run()
         
         
